@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  defect-detection:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - INSTALL_DEV=true
+    image: defect-detection:v1
+    container_name: dd
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - .:/Ommateum
+    ports:
+      - "8000:8000"
+      - "7860:7860"
+    ipc: host
+    stdin_open: true
+    tty: true
+    command: /bin/bash

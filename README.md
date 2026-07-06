@@ -23,18 +23,13 @@
 ### 使用 Docker（推荐）
 
 ```bash
-# 构建镜像
-docker build -t ommateum .
-
-# 运行（需 GPU 支持）
-docker run --gpus all -p 8000:8000 ommateum
-
-# 运行（CPU 模式）
-docker run -p 8000:8000 ommateum
+# 构建并运行 Docker
+docker compose up -d
 ```
 
 ### 本地安装
 
+**Important:我们在依赖文件中去掉了 Docker 自带的库, 详情请看 requirements.txt/requirements-dev.txt 中的注释部分**
 ```bash
 # 安装生产依赖
 pip install -r requirements.txt
@@ -61,6 +56,7 @@ mypy . --ignore-missing-imports
 
 ```
 ├── Dockerfile              # 多阶段构建镜像
+├── docker-compose.yml      # 多容器启动工具
 ├── .dockerignore           # Docker 忽略规则
 ├── .gitignore              # Git 忽略规则
 ├── .gitlab-ci.yml          # GitLab CI/CD 流水线

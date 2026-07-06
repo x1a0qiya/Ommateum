@@ -3,3 +3,28 @@ pytest>=8.0
 pytest-cov>=5.0
 ruff>=0.5
 mypy>=1.10
+
+# Docker 预安装依赖
+# python>=3.10
+# torch>=2.5.1
+# torchvision>=0.20.1   # 应与 pytorch 版本对应
+
+ultralytics>=8.3.0      # 支持 YOLOv11 的训练与推理
+peft>=0.12.0            # 用于 SAM 2 图像编码器的参数高效微调
+transformers>=4.48.0    # 辅助权重加载与导出
+accelerate>=0.30.0      # 加速训练
+
+opencv-python-headless  # 无 GUI 版 OpenCV
+albumentations>=1.4.0   # 包含高效的 Copy-Paste 数据增强实现
+supervision>=0.19.0     # 用于掩码、多边形转换与后处理的视觉库
+scikit-image>=0.21.0    # 辅助滑动窗口与形态学处理
+
+fastapi>=0.110.0        # 后端通信
+uvicorn[standard]>=0.29.0
+gradio>=4.20.0          # 交互式标注与演示前端
+pydantic>=2.0.0         # 数据校验
+
+numpy>=1.24.0
+scipy>=1.10.0
+pyyaml>=6.0
+matplotlib>=3.7.0
