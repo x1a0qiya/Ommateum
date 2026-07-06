@@ -1,1 +1,8 @@
 # 生产依赖
+# 项目使用 Docker 构建运行环境，详见项目根目录 Dockerfile
+
+torch>=2.0
+torchvision>=0.15
+opencv-python>=4.8
+numpy>=1.24
+Pillow>=10.0
