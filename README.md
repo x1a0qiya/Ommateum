@@ -32,10 +32,10 @@ docker compose up -d
 **Important:我们在依赖文件中去掉了 Docker 自带的库, 详情请看 requirements.txt/requirements-dev.txt 中的注释部分**
 ```bash
 # 安装生产依赖
-pip install -r requirements.txt
+pip install -U -r requirements.txt
 
 # 安装开发依赖
-pip install -r requirements-dev.txt
+pip install -U -r requirements-dev.txt
 ```
 
 ## 开发
