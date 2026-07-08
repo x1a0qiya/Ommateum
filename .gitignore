@@ -165,3 +165,9 @@ data/chromadb/
 *.swo
 *~
 .DS_Store
+
+# Nginx 源码（非项目代码）
+skills/nginx-1.31.2/
+
+# 前端skill（非项目代码）
+skills/garden-skills/
