@@ -1,1 +1,3 @@
 # 生产依赖
+sahi
+ultralytics 

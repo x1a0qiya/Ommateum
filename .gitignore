@@ -6,6 +6,24 @@ __pycache__/
 # C extensions
 *.so
 
+# dataset for training
+dataset/
+
+#runs results
+runs/
+
+#train log
+train_log.txt
+
+#outputs
+outputs/
+
+#scripts for generate docs & metrics
+scripts/generate/
+
+#models
+*.pt
+
 # Distribution / packaging
 .Python
 build/
