@@ -18,7 +18,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."   # 回到项目根目录 /Ommateum
 
 # ── 默认参数 ──
-WEIGHTS="${WEIGHTS:-weights/yolo/trained/weights/best.pt}"
+WEIGHTS="${WEIGHTS:-weights/yolo/trained/exp_best.pt}"
 DATA="${DATA_YAML:-dataset/data.yaml}"
 BATCH="${BATCH:-4}"
 IMGSZ="${IMGSZ:-640}"

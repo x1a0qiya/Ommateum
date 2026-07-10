@@ -68,8 +68,8 @@ def train_yolo_model(
     batch : int = 16,
     device : Union[str, int] = "0",
     workers : int = 4,
-    project : str = "weights/yolo",
-    name : str = "trained",
+    project : str = "runs/train",
+    name : str = "exp",
     patience : int = 10,
     freeze : int = 20,
     pretrained : str = "yolo11n.pt",
@@ -87,8 +87,8 @@ def train_yolo_model(
         batch (int): 批大小，根据显存调整。
         device (str | int): 训练设备，如 "0" 表示第一块 GPU，"cpu" 表示 CPU。
         workers (int): 数据加载线程数。
-        project (str): 训练输出根目录，默认 "weights/yolo"，best.pt 落在 weights/yolo/trained/weights/。
-        name (str): 实验子目录名称，默认 "trained"。
+        project (str): 训练输出根目录，默认 "runs/train"（图片、csv 等产物存放处）。
+        name (str): 实验子目录名称，默认 "exp"，best.pt 将复制到 weights/yolo/trained/{name}_best.pt。
         patience (int): 早停耐心值（验证指标不提升时停止训练）。
         freeze (int): 冻结主干网络的前 N 层，默认 20（冻结 backbone+neck，仅训练 head）。
         pretrained (str): 预训练权重名称或路径，纯模型名（如 "yolo11n.pt"）将自动下载到 weights/yolo/pretrained/。
@@ -147,6 +147,13 @@ def train_yolo_model(
     if hasattr(model, 'trainer') and hasattr(model.trainer, 'best'):
         best_path = model.trainer.best
         print(f"训练完成！最佳模型保存在：{best_path}")
+
+        # ── 复制 best.pt 到 weights/yolo/trained/ 并改名为 {name}_best.pt ──
+        TRAINED_DIR.mkdir(parents=True, exist_ok=True)
+        trained_name = f"{name}_best.pt"
+        trained_path = TRAINED_DIR / trained_name
+        shutil.copy2(best_path, str(trained_path))
+        print(f"已复制最佳模型到: {trained_path}")
     else:
         print("训练完成！请检查 runs 目录下的权重文件。")
     return model
@@ -160,8 +167,8 @@ if __name__ == "__main__":
     parser.add_argument("--batch", type=int, default=16, help="批大小")
     parser.add_argument("--device", default="0", help="设备，如 '0' 或 'cpu'")
     parser.add_argument("--workers", type=int, default=4, help="数据加载线程数")
-    parser.add_argument("--project", default="weights/yolo", help="输出根目录")
-    parser.add_argument("--name", default="trained", help="实验子目录名")
+    parser.add_argument("--project", default="runs/train", help="输出根目录（图片、csv 等）")
+    parser.add_argument("--name", default="exp", help="实验子目录名，best.pt 将复制到 weights/yolo/trained/{name}_best.pt")
     parser.add_argument("--patience", type=int, default=10, help="早停耐心值")
     parser.add_argument("--freeze", type=int, default=20,
                         help="冻结主干前 N 层，小样本推荐 20 (0=全量微调)")
