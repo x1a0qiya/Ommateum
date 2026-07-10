@@ -1,12 +1,12 @@
-from config import add_lora_config
+from .config import add_lora_config
 from transformers import Sam2Processor
 from torch.optim import AdamW
 import torch
-from tools import collate_fn
-from loss import Sam2Loss
+from .tools import collate_fn
+from .loss import Sam2Loss
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from dataset import YOLO2SAM2Dataset
+from .dataset import YOLO2SAM2Dataset
 import argparse
 
 def train_sam2(
@@ -23,6 +23,7 @@ def train_sam2(
     device : str = 'cpu',
     lr : float = 2e-4,
     weight_decay : float = 1e-2,
+    name : str = '/trained'
 ) -> None:
     """
     微调模型
@@ -107,7 +108,7 @@ def train_sam2(
 
         print(f'Epoch {epoch + 1} finished with loss {epoch_loss:.4f}')
 
-    model.save_pretrained(save_path)
+    model.save_pretrained(save_path + name)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Sam2 Training Script')

@@ -1,6 +1,12 @@
-#! /bin/bash
+#!/bin/bash
 
 cd /Ommateum
+
+python ./src/ommateum/models/identify/generate_result.py \
+    --images_dir ./dataset/severstal_yolo/images/val \
+    --model_path ./weights/yolo/trained/train01_best.pt \
+    --output_dir ./dataset/severstal/labels/val \
+    --device cuda \
 
 python ./src/ommateum/models/sam2/test.py \
     --image_dir ./dataset/severstal_yolo/images/val\
