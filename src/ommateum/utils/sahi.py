@@ -1,5 +1,13 @@
 from pathlib import Path
-from sahi.predict import predict as sahi_predict
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sahi.predict import predict as sahi_predict
+
+try:
+    from sahi.predict import predict as sahi_predict
+except ImportError:
+    sahi_predict = None  # type: ignore[assignment]
 
 def predict(
     model_type: str,
@@ -29,25 +37,29 @@ def predict(
         export_dir: 结果导出目录，默认为 "./runs/predict/exp"
 
     Raises:
+        ImportError: SAHI 库未安装
         FileNotFoundError: 模型权重或数据源路径不存在
         ValueError: 预测参数配置错误
         RuntimeError: 切片推理执行失败
     """
-    model_path = Path(model_path)
-    source = Path(source)
+    if sahi_predict is None:
+        raise ImportError("SAHI 库未安装，请执行: pip install sahi")
 
-    if not model_path.exists():
+    model_path_obj = Path(model_path)
+    source_path = Path(source)
+
+    if not model_path_obj.exists():
         raise FileNotFoundError(f"模型权重文件未找到: {model_path}")
-    if not source.exists():
+    if not source_path.exists():
         raise FileNotFoundError(f"图像数据源路径未找到: {source}")
 
     try:
-        sahi_predict(
+        _ = sahi_predict(
             model_type=model_type,
-            model_path=str(model_path),
+            model_path=str(model_path_obj),
             model_device=model_device,
             model_confidence_threshold=model_confidence_threshold,
-            source=str(source),
+            source=str(source_path),
             slice_height=slice_height,
             slice_width=slice_width,
             overlap_height_ratio=overlap_height_ratio,

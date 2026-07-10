@@ -3,6 +3,8 @@
 利用 ChromaDB 中的历史缺陷分布，指导 YOLO 训练集的扩充和优化。
 """
 
+from typing import Any
+
 from ..database.chroma_client import get_or_create_collection
 from .rag_bridge import (
     COLLECTION_NAME,
@@ -24,7 +26,7 @@ def find_novel_defects(
     return results[0]["distance"] > similarity_threshold
 
 
-def get_underrepresented_labels(top_k: int = 5) -> list[dict]:
+def get_underrepresented_labels(top_k: int = 5) -> list[dict[str, Any]]:
     """统计各缺陷类别的数量，返回最稀缺的类别。
 
     用于指导 YOLO 训练数据平衡，优先采集/合成稀缺类别样本。
@@ -47,7 +49,7 @@ def get_underrepresented_labels(top_k: int = 5) -> list[dict]:
 def get_hard_negatives(
     embedding: list[float],
     top_k: int = 10,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """检索容易误检的相似负样本（人工确认的误报）。
 
     将这些样本加入 YOLO 训练集作为负样本，可有效减少误检率。
