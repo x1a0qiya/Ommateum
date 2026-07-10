@@ -10,10 +10,55 @@ YOLOv11 模型训练脚本 (全量微调 / 冻结部分层)
 """
 
 import argparse
+import os
+import shutil
+from pathlib import Path
 from typing import Union
 
 from ultralytics import YOLO
 from ultralytics.engine.results import Results
+from ultralytics.utils.downloads import attempt_download_asset
+
+
+# ── 权重管理路径 ──
+WEIGHTS_DIR = Path("weights/yolo")
+PRETRAINED_DIR = WEIGHTS_DIR / "pretrained"
+TRAINED_DIR = WEIGHTS_DIR / "trained"
+
+
+def _ensure_pretrained(pretrained: str) -> str:
+    """
+    确保预训练权重存在于 weights/yolo/pretrained/ 目录下。
+
+    若 pretrained 为纯模型名（如 "yolo11n.pt"），检查本地是否存在，
+    不存在则通过 Ultralytics 下载并拷贝到指定目录。
+    若 pretrained 已包含路径，则直接返回原路径。
+
+    Args:
+        pretrained (str): 预训练权重名称或路径。
+
+    Returns:
+        str: 可用的预训练权重本地路径。
+    """
+    PRETRAINED_DIR.mkdir(parents=True, exist_ok=True)
+
+    # 已经是文件路径，检查是否存在
+    if os.path.sep in pretrained or os.path.altsep in pretrained:
+        if not os.path.exists(pretrained):
+            raise FileNotFoundError(f"预训练权重不存在: {pretrained}")
+        return pretrained
+
+    # 纯模型名，检查本地目标路径
+    local_path = PRETRAINED_DIR / pretrained
+    if local_path.exists():
+        return str(local_path)
+
+    # 下载到目标路径
+    print(f"[INFO] 预训练权重 {pretrained} 未在本地找到，正在下载到 {PRETRAINED_DIR} ...")
+    cached = attempt_download_asset(pretrained)
+    shutil.copy2(cached, str(local_path))
+    print(f"[INFO] 预训练权重已保存: {local_path}")
+    return str(local_path)
 
 
 def train_yolo_model(
@@ -23,8 +68,8 @@ def train_yolo_model(
     batch : int = 16,
     device : Union[str, int] = "0",
     workers : int = 4,
-    project : str = "runs/train",
-    name : str = "exp",
+    project : str = "weights/yolo",
+    name : str = "trained",
     patience : int = 10,
     freeze : int = 20,
     pretrained : str = "yolo11n.pt",
@@ -42,11 +87,11 @@ def train_yolo_model(
         batch (int): 批大小，根据显存调整。
         device (str | int): 训练设备，如 "0" 表示第一块 GPU，"cpu" 表示 CPU。
         workers (int): 数据加载线程数。
-        project (str): 训练输出根目录。
-        name (str): 实验子目录名称。
+        project (str): 训练输出根目录，默认 "weights/yolo"，best.pt 落在 weights/yolo/trained/weights/。
+        name (str): 实验子目录名称，默认 "trained"。
         patience (int): 早停耐心值（验证指标不提升时停止训练）。
         freeze (int): 冻结主干网络的前 N 层，默认 20（冻结 backbone+neck，仅训练 head）。
-        pretrained (str): 预训练权重路径，若为 "yolo11n.pt" 则自动下载。
+        pretrained (str): 预训练权重名称或路径，纯模型名（如 "yolo11n.pt"）将自动下载到 weights/yolo/pretrained/。
         lr0 (float): 初始学习率，默认 0.001（全量训练用 0.01，微调用 0.001 或更低）。
         lrf (float): 最终学习率因子 (final_lr = lr0 * lrf)，默认 0.1。
         cos_lr (bool): 是否使用 cosine 学习率衰减，默认 True。
@@ -60,6 +105,7 @@ def train_yolo_model(
         # 全量训练 / 大数据集
         >>> train_yolo_model(epochs=100, freeze=0, lr0=0.01, lrf=0.01, cos_lr=False)
     """
+    pretrained = _ensure_pretrained(pretrained)
     model = YOLO(pretrained)
 
     results = model.train(
@@ -114,8 +160,8 @@ if __name__ == "__main__":
     parser.add_argument("--batch", type=int, default=16, help="批大小")
     parser.add_argument("--device", default="0", help="设备，如 '0' 或 'cpu'")
     parser.add_argument("--workers", type=int, default=4, help="数据加载线程数")
-    parser.add_argument("--project", default="runs/train", help="输出根目录")
-    parser.add_argument("--name", default="exp", help="实验子目录名")
+    parser.add_argument("--project", default="weights/yolo", help="输出根目录")
+    parser.add_argument("--name", default="trained", help="实验子目录名")
     parser.add_argument("--patience", type=int, default=10, help="早停耐心值")
     parser.add_argument("--freeze", type=int, default=20,
                         help="冻结主干前 N 层，小样本推荐 20 (0=全量微调)")

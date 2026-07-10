@@ -104,7 +104,8 @@ def generate_result(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="YOLO 批量推理，输出标准标签格式")
     parser.add_argument("--images_dir", required=True, help="输入图片目录（或单张图片路径）")
-    parser.add_argument("--model_path", required=True, help="模型权重路径 (.pt)")
+    parser.add_argument("--model_path", default="weights/yolo/trained/weights/best.pt",
+                        help="模型权重路径 (.pt)，默认为 weights/yolo/trained/weights/best.pt")
     parser.add_argument("--output_dir", default=None,
                         help="输出 labels 目录，默认在 images_dir 同级目录下创建 labels/")
     parser.add_argument("--conf", type=float, default=0.25, help="置信度阈值")
