@@ -8,6 +8,7 @@
 """
 
 import uuid
+from typing import Any
 
 from ..database.chroma_client import get_or_create_collection
 
@@ -16,7 +17,7 @@ COLLECTION_NAME = "defect_samples"
 
 def index_defect(
     embedding: list[float],
-    metadata: dict | None = None,
+    metadata: dict[str, Any] | None = None,
     record_id: str | None = None,
 ) -> str:
     """将缺陷特征存入 ChromaDB。"""
@@ -29,8 +30,8 @@ def index_defect(
 def retrieve_similar(
     query_embedding: list[float],
     top_k: int = 5,
-    filter_criteria: dict | None = None,
-) -> list[dict]:
+    filter_criteria: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     """检索与查询向量最相似的历史缺陷记录。"""
     collection = get_or_create_collection(COLLECTION_NAME)
     total = collection.count()
@@ -58,7 +59,7 @@ def retrieve_similar(
     return records
 
 
-def update_defect(record_id: str, metadata: dict) -> None:
+def update_defect(record_id: str, metadata: dict[str, Any]) -> None:
     """更新已有缺陷的元数据。"""
     collection = get_or_create_collection(COLLECTION_NAME)
     collection.update(ids=[record_id], metadatas=[metadata])
@@ -70,7 +71,7 @@ def delete_defect(record_id: str) -> None:
     collection.delete(ids=[record_id])
 
 
-def count_defects(filter_criteria: dict | None = None) -> int:
+def count_defects(filter_criteria: dict[str, Any] | None = None) -> int:
     """统计缺陷记录总数，可选按条件过滤。"""
     collection = get_or_create_collection(COLLECTION_NAME)
     return collection.count() if filter_criteria is None else len(
