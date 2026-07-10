@@ -43,7 +43,7 @@ def _ensure_pretrained(pretrained: str) -> str:
     PRETRAINED_DIR.mkdir(parents=True, exist_ok=True)
 
     # 已经是文件路径，检查是否存在
-    if os.path.sep in pretrained or os.path.altsep in pretrained:
+    if os.path.sep in pretrained or (os.path.altsep and os.path.altsep in pretrained):
         if not os.path.exists(pretrained):
             raise FileNotFoundError(f"预训练权重不存在: {pretrained}")
         return pretrained
