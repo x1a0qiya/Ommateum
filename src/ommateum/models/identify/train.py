@@ -76,6 +76,7 @@ def train_yolo_model(
     lr0 : float = 0.001,
     lrf : float = 0.1,
     cos_lr : bool = True,
+    iou : float = 0.7,
 ) -> Results:
     """
     训练 YOLOv11n 模型，默认使用小样本微调参数（冻结 backbone+neck + 低学习率）。
@@ -95,6 +96,10 @@ def train_yolo_model(
         lr0 (float): 初始学习率，默认 0.001（全量训练用 0.01，微调用 0.001 或更低）。
         lrf (float): 最终学习率因子 (final_lr = lr0 * lrf)，默认 0.1。
         cos_lr (bool): 是否使用 cosine 学习率衰减，默认 True。
+        iou (float): 验证阶段 NMS（非极大值抑制）的 IoU 阈值，控制去重严格程度。
+            上限 1.0 = 最宽松（保留更多重叠框，提高召回但可能降低精度）；
+            下限 0.1 = 最严格（抑制大量重叠框，提高精度但可能降低召回）。
+            默认 0.7 为 YOLO 标准值，Severstal 数据缺陷稀疏可设高一些（0.8~0.9）。
 
     Returns:
         Results: Ultralytics 训练结果对象，包含最佳模型路径等信息。
@@ -138,6 +143,8 @@ def train_yolo_model(
         hsv_v=0.2,              # 明度增强减弱 (默认 0.4)
         scale=0.3,              # 缩放增强减弱 (默认 0.5)
         fliplr=0.5,             # 保留水平翻转
+        # ── 非极大值抑制（验证阶段）──
+        iou=iou,                # NMS IoU 阈值，默认 0.7（稀疏缺陷场景可提高到 0.8~0.9）
         # ── 优化器 ──
         warmup_epochs=5,        # 延长 warmup，让 head 软着陆，避免 epoch 1 暴跌
         warmup_bias_lr=0.05,    # warmup 起始 lr = lr0 * 0.05（更保守的起点）
@@ -179,6 +186,8 @@ if __name__ == "__main__":
                         help="最终学习率因子 (final_lr = lr0 * lrf)")
     parser.add_argument("--cos_lr", type=bool, default=True,
                         help="使用 cosine 学习率衰减")
+    parser.add_argument("--iou", type=float, default=0.7,
+                        help="验证阶段 NMS IoU 阈值（0.1=严格, 0.9=宽松, 默认 0.7）")
     parser.add_argument("--full_train", action="store_true",
                         help="全量训练模式：不冻结 backbone，使用默认学习率")
     args = parser.parse_args()
@@ -200,6 +209,7 @@ if __name__ == "__main__":
             lr0=0.01,
             lrf=0.01,
             cos_lr=False,
+            iou=args.iou,
         )
     else:
         train_yolo_model(
@@ -217,4 +227,5 @@ if __name__ == "__main__":
             lr0=args.lr0,
             lrf=args.lrf,
             cos_lr=args.cos_lr,
+            iou=args.iou,
         )
