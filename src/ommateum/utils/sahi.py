@@ -188,6 +188,9 @@ def predict(
             )
             results_with_paths.append((str(img_path), result))
 
+            # 保存可视化图片（原图 + 检测框）
+            result.export_visuals(export_dir=str(export_dir), file_name=img_path.stem)
+
             for pred in result.object_prediction_list:
                 summary.append({
                     "image_path": str(img_path),

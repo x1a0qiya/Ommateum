@@ -25,18 +25,18 @@ def main():
                         help="模型类型（yolov8 / mmdet 等）")
     parser.add_argument("--model_path",  type=str, default="yolo11n.pt",
                         help="模型权重文件路径")
-    parser.add_argument("--conf",        type=float, default=0.5,
-                        help="置信度阈值 (default: 0.5)")
+    parser.add_argument("--conf",        type=float, default=0.3,
+                        help="置信度阈值 (default: 0.3)")
     parser.add_argument("--device",      type=str, default="cpu",
                         help="推理设备 (cpu / cuda:0)")
-    parser.add_argument("--val_dir",     type=str, default="",
-                        help="val 图片目录路径 (default: )")            #这里应该是实际的路径
+    parser.add_argument("--val_dir",     type=str, default="train",
+                        help="val 图片目录路径 (default:train/ )")            #这里应该是实际的路径
     parser.add_argument("--out_dir",     type=str, default="result",
                         help="结果输出目录 (default: result/)")
     parser.add_argument("--slice_h",     type=int, default=256,
                         help="切片高度 (default: 256)")
-    parser.add_argument("--slice_w",     type=int, default=256,
-                        help="切片宽度 (default: 256)")
+    parser.add_argument("--slice_w",     type=int, default=640,
+                        help="切片宽度 (default: 640)")
     parser.add_argument("--overlap_h",   type=float, default=0.2,
                         help="高度方向重叠比例 (default: 0.2)")
     parser.add_argument("--overlap_w",   type=float, default=0.2,
