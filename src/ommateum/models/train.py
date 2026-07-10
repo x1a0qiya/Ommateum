@@ -21,14 +21,14 @@ def parse_args():
     parser.add_argument('--weight_decay', type=float, default=1e-2)
 
     parser.add_argument("--data_yaml", default="dataset/data.yaml", help="数据集配置 YAML")
-    parser.add_argument("--yolo_epochs", type=int, default=50, help="训练轮数")
+    parser.add_argument("--yolo_epochs", type=int, default=100, help="训练轮数")
     parser.add_argument("--imgsz", type=int, default=640, help="输入图像尺寸")
-    parser.add_argument("--yolo_batch_size", type=int, default=16, help="批大小")
+    parser.add_argument("--yolo_batch_size", type=int, default=8, help="批大小")
     parser.add_argument("--workers", type=int, default=4, help="数据加载线程数")
     parser.add_argument("--yolo_cache_path", default="runs/train", help="输出根目录（图片、csv 等）")    
     parser.add_argument("--name", default="trained", help="实验子目录名")
-    parser.add_argument("--patience", type=int, default=10, help="早停耐心值")
-    parser.add_argument("--freeze", type=int, default=20,
+    parser.add_argument("--patience", type=int, default=30, help="早停耐心值")
+    parser.add_argument("--freeze", type=int, default=0,
                         help="冻结主干前 N 层，小样本推荐 20 (0=全量微调)")
     parser.add_argument("--pretrained", default="yolo11n.pt", help="预训练权重路径")
     parser.add_argument("--yolo_lr", type=float, default=0.001,
@@ -63,22 +63,22 @@ def main():
         cos_lr=args.cos_lr,
     )
 
-    train_sam2(
-        model_path=args.model_path,
-        save_path=args.save_path,
-        image_dir=args.image_dir,
-        label_dir=args.label_dir,
-        mask_dir=args.mask_dir,
-        epochs=args.sam2_epochs,
-        batch_size=args.sam2_batch_size,
-        lowvram=args.lowvram,
-        lora_rank=args.lora_rank,
-        use_dora=args.use_dora,
-        device=args.device,
-        lr=args.sam2_lr,
-        weight_decay=args.weight_decay,
-        name=args.name
-    )
+    # train_sam2(
+    #     model_path=args.model_path,
+    #     save_path=args.save_path,
+    #     image_dir=args.image_dir,
+    #     label_dir=args.label_dir,
+    #     mask_dir=args.mask_dir,
+    #     epochs=args.sam2_epochs,
+    #     batch_size=args.sam2_batch_size,
+    #     lowvram=args.lowvram,
+    #     lora_rank=args.lora_rank,
+    #     use_dora=args.use_dora,
+    #     device=args.device,
+    #     lr=args.sam2_lr,
+    #     weight_decay=args.weight_decay,
+    #     name=args.name
+    # )
 
 if __name__ == '__main__':
     main()

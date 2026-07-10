@@ -70,12 +70,11 @@ class YOLO2SAM2Dataset(Dataset):
                 if mask_path is None:
                     continue # 训练模式下，若存在标签文件但无对应掩码，则跳过
             
-            # 2. 将检测框实例逐一展开平铺
-            for inst in instances:
+            if len(instances) > 0:
                 self.samples.append({
                     "image_path": img_path,
-                    "bbox": inst["bbox"],
-                    "class_id": inst["class_id"],
+                    "bboxes": [inst["bbox"] for inst in instances],  # 保存所有框的列表
+                    "class_ids": [inst["class_id"] for inst in instances],
                     "mask_path": mask_path,
                     "image_name": img_name
                 })
@@ -128,16 +127,14 @@ class YOLO2SAM2Dataset(Dataset):
     def __getitem__(self, idx):
         sample = self.samples[idx]
         image_path = sample["image_path"]
-        bbox = sample["bbox"]
-        mask_path = sample["mask_path"]
-        class_id = sample["class_id"]
-        
+        bboxes = sample["bboxes"]
+
         image = Image.open(image_path).convert('RGB')
-        
-        # 用 Sam2Processor 将图像与 BBox 提示打包处理
+
+        # 传入所有的 bboxes 列表
         processed = self.processor(
             images=image,
-            input_boxes=[[bbox]],
+            input_boxes=[bboxes],  # 注意：这里外层多套一个列表，表示 batch 中的第一张图有多个框
             return_tensors="pt"
         )
         
