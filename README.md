@@ -27,7 +27,7 @@
 docker compose up -d
 
 # 进入容器
-docker exec -it dd bash
+docker exec -it dd /bin/bash
 ```
 
 ### 本地安装
