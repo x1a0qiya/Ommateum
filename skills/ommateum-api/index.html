@@ -211,6 +211,7 @@ body.scrolled .topbar { transform: translateY(-100%); opacity: 0; pointer-events
   right: 24px; bottom: 24px; left: auto; top: auto;
   z-index: 200;
   opacity: 0; pointer-events: none;
+  transform: none; /* 覆盖基础 .scroll-cue 的 translateX(-50%)，保证按 right 对齐 */
   animation: bobBottom 2.2s ease-in-out infinite;
 }
 .scroll-cue.up.show { opacity: 1; pointer-events: auto; }
@@ -233,6 +234,12 @@ body.scrolled .topbar { transform: translateY(-100%); opacity: 0; pointer-events
 .panel-head h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-1); }
 .panel-head .idx { font-family: ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; font-size: 11px; color: var(--accent-dark); background: var(--accent-soft); padding: 2px 8px; border-radius: 5px; font-weight: 600; }
 .panel-body { padding: 20px; }
+
+/* ---- Third screen: 锁定整屏高度，内容在面板内滚动，页面不溢出 ---- */
+#heroInference .app { flex: 1; min-height: 0; padding-bottom: 16px; }
+#heroInference .panel { display: flex; flex-direction: column; min-height: 0; }
+#heroInference .panel-body { flex: 1; min-height: 0; overflow: auto; }
+#heroInference .footer { margin-top: 0; justify-content: center; gap: 16px; text-align: center; }
 
 /* ---- Sidebar config ---- */
 .config-section { margin-bottom: 28px; }
@@ -287,6 +294,29 @@ aside .btn { font-size: 15px; padding: 14px 22px; }
 .btn-ghost:hover { border-color: var(--border-strong); background: var(--bg-1); color: var(--text-0); }
 .btn-sm { padding: 7px 14px; font-size: 12px; }
 .btn-block { width: 100%; }
+
+/* ---- Advanced options modal ---- */
+.adv-hint { margin: 10px 2px 0; font-size: 12px; color: var(--text-3); font-family: ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(8,12,20,0.62); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 24px; }
+.modal { width: min(760px, 100%); max-height: 86vh; display: flex; flex-direction: column; background: var(--bg-1); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 24px 64px rgba(0,0,0,0.45); overflow: hidden; }
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--border-soft); }
+.modal-head h3 { margin: 0; font-size: 16px; color: var(--text-0); }
+.modal-close { background: none; border: none; color: var(--text-2); font-size: 26px; line-height: 1; cursor: pointer; padding: 0 4px; }
+.modal-close:hover { color: var(--text-0); }
+.modal-body { padding: 18px 22px; overflow-y: auto; }
+.adv-group { margin-bottom: 18px; }
+.adv-group h4 { margin: 0 0 10px; font-size: 13px; color: var(--accent); letter-spacing: 0.02em; text-transform: uppercase; }
+.adv-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; }
+.adv-field { display: flex; flex-direction: column; gap: 5px; }
+.adv-field.full { grid-column: 1 / -1; }
+.adv-field label { font-size: 12px; color: var(--text-2); display: flex; justify-content: space-between; gap: 8px; }
+.adv-field label .dv { color: var(--text-3); font-family: ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; font-size: 11px; }
+.adv-field input[type=text], .adv-field input[type=number] { width: 100%; padding: 8px 10px; font-size: 13px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; color: var(--text-0); box-sizing: border-box; }
+.adv-field input:focus { outline: none; border-color: var(--accent); }
+.adv-field .chk { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-1); padding: 8px 0; }
+.adv-field .help { font-size: 11px; color: var(--text-3); line-height: 1.4; }
+.modal-foot { display: flex; justify-content: flex-end; gap: 12px; padding: 14px 22px; border-top: 1px solid var(--border-soft); }
+
 
 /* ---- Upload zones ---- */
 .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
@@ -360,9 +390,10 @@ select.field:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Training progress */
 .train-progress { display: none; margin-top: 16px; }
 .train-progress.show { display: block; }
-.tp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.tp-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
 .tp-header .tp-epoch { font-size: 14px; font-weight: 600; color: var(--text-0); }
 .tp-header .tp-epoch .num { color: var(--accent-dark); font-family: ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; }
+.tp-header .tp-stage { font-size: 12px; color: var(--text-2); background: var(--bg-2); border: 1px solid var(--border-soft); padding: 2px 10px; border-radius: 999px; }
 .tp-header .tp-pct { font-family: ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; font-size: 14px; font-weight: 600; color: var(--accent-dark); }
 .tp-bar { width: 100%; height: 8px; border-radius: 999px; background: var(--bg-3); overflow: hidden; margin-bottom: 12px; }
 .tp-bar .fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), var(--accent-dark)); transition: width 400ms var(--ease); }
@@ -456,8 +487,8 @@ select.field:disabled { opacity: 0.5; cursor: not-allowed; }
    相对位置不变，仅缩小尺寸，使所有模块在一屏内可见
    ============================================================ */
 .workspace {
-  height: calc(100vh - 71px - 28px);
-  padding-top: 28px;
+  height: 100vh;
+  padding: 20px 28px;
   grid-template-columns: 330px 1fr;
   gap: 14px;
   min-height: 0;
@@ -609,28 +640,13 @@ select.field:disabled { opacity: 0.5; cursor: not-allowed; }
         <div class="panel-head"><span class="idx">04</span><h2>训练与导出</h2></div>
         <div class="panel-body">
           <div class="train-grid">
-            <!-- Left: config -->
+            <!-- Left: advanced options trigger -->
             <div>
-              <div class="train-config-group">
-                <label>训练模型</label>
-                <select class="field" id="trainModelSelect" disabled>
-                  <option value="">请先在左侧选择模型</option>
-                </select>
-              </div>
-              <div class="train-config-group">
-                <label>训练轮数 (Epochs)</label>
-                <div class="ctrl-row">
-                  <input type="range" class="slider" id="epochSlider" min="5" max="50" value="20" step="5">
-                  <span class="slider-val" id="epochVal">20</span>
-                </div>
-              </div>
-              <div class="train-config-group">
-                <label>学习率 (Learning Rate)</label>
-                <div class="ctrl-row">
-                  <input type="range" class="slider" id="lrSlider" min="1" max="20" value="10" step="1">
-                  <span class="slider-val" id="lrVal">0.001</span>
-                </div>
-              </div>
+              <button type="button" class="btn btn-ghost btn-block" id="advOptionsBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                高级选项
+              </button>
+              <p class="adv-hint" id="advHint">默认参数 · 点击可修改</p>
             </div>
             <!-- Right: data summary + start -->
             <div>
@@ -653,6 +669,7 @@ select.field:disabled { opacity: 0.5; cursor: not-allowed; }
           <div class="train-progress" id="trainProgress">
             <div class="tp-header">
               <span class="tp-epoch">Epoch <span class="num" id="tpEpoch">0</span> / <span id="tpTotalEpoch">20</span></span>
+              <span class="tp-stage" id="tpStage">准备中</span>
               <span class="tp-pct" id="tpPct">0%</span>
             </div>
             <div class="tp-bar"><div class="fill" id="tpFill" style="width:0%"></div></div>
@@ -686,20 +703,111 @@ select.field:disabled { opacity: 0.5; cursor: not-allowed; }
     </main>
   </div>
 
+</div>
+
+<!-- ========== THIRD SCREEN: Inference on unclassified images ========== -->
+<section class="hero" id="heroInference" style="height:100vh;box-sizing:border-box;display:flex;flex-direction:column;padding:24px 0;">
+  <div class="app">
+    <div style="text-align:center;margin-bottom:32px;">
+      <h1 style="font-size:clamp(26px,3.5vw,38px);font-weight:700;letter-spacing:-0.03em;color:var(--text-0);">
+        在线缺陷检测 <span class="hl" style="color:var(--accent);">推理</span>
+      </h1>
+      <p style="color:var(--text-2);font-size:14px;margin-top:8px;">基于训练产出的模型权重，对待检测图片进行实时缺陷识别</p>
+    </div>
+
+    <div style="display:grid;grid-template-columns:330px 1fr;gap:14px;align-items:stretch;flex:1;min-height:0;">
+
+      <!-- Left: config -->
+      <aside>
+        <div class="panel reveal">
+          <div class="panel-head"><span class="idx">01</span><h2>推理配置</h2></div>
+          <div class="panel-body">
+            <div class="config-section">
+              <div class="config-label">训练模型 <span class="hint" id="infModelHint">加载中…</span></div>
+              <div class="model-grid" id="infModelGrid"></div>
+            </div>
+            <div class="config-section">
+              <div class="config-label">训练权重 <span class="hint" id="infWeightHint">先选择模型</span></div>
+              <div class="weight-list" id="infWeightList"><div class="weight-empty">请先选择模型</div></div>
+            </div>
+            <div class="config-section">
+              <button class="btn btn-primary btn-block" id="infPredictBtn" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                执行缺陷检测
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Right: upload + results -->
+      <main style="display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr;gap:14px;min-height:0;">
+
+        <!-- Upload -->
+        <div class="panel reveal">
+          <div class="panel-head"><span class="idx">02</span><h2>待检测图片</h2></div>
+          <div class="panel-body">
+            <div class="upload-zone defect" id="zoneInference" data-type="inference" style="border-color:var(--accent);">
+              <input type="file" id="inputInference" accept="image/*" multiple hidden>
+              <div class="uz-icon" style="background:var(--accent-soft);color:var(--accent);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              </div>
+              <div class="uz-title">拖拽或点击上传待检测图片</div>
+              <div class="uz-sub">支持 JPG / PNG / WebP 格式<span class="pill" style="background:var(--accent-soft);color:var(--accent-dark);">Inference</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Results -->
+        <div class="panel reveal">
+          <div class="panel-head"><span class="idx">03</span><h2>检测结果</h2></div>
+          <div class="panel-body" id="infResultsBody" style="padding:0;">
+            <div class="results-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <div>选择训练模型与权重，上传待检测图片后点击「执行缺陷检测」</div>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
   <!-- ========== FOOTER ========== -->
   <footer class="footer">
     <span>Ommateum Visual Defect Detection · Training + Inference · RESTful API v2</span>
     <span>API: <span id="apiBase">/api</span></span>
   </footer>
+</section>
 
+<!-- ========== 高级选项弹窗 ========== -->
+<div class="modal-overlay" id="advModal" style="display:none;">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>训练高级选项</h3>
+      <button type="button" class="modal-close" id="advClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="adv-group"><h4>YOLO 检测训练</h4><div class="adv-fields" id="advFieldsYolo"></div></div>
+      <div class="adv-group"><h4>SAM2 分割训练</h4><div class="adv-fields" id="advFieldsSam2"></div></div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" id="advReset">恢复默认</button>
+      <button type="button" class="btn btn-primary" id="advConfirm">确定</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast-container" id="toastContainer"></div>
 
-<!-- ========== UP SCROLL CUE (second screen → first) ========== -->
+<!-- ========== UP SCROLL CUES ========== -->
 <a class="scroll-cue up" id="scrollUp" href="#" aria-label="向上滚动回到首页">
   <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
   <span>回到首页</span>
+</a>
+<a class="scroll-cue up" id="scrollUpInf" href="#" aria-label="向上滚动回到第二屏" style="left:24px;right:auto;bottom:24px;">
+  <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+  <span>回到工作区</span>
 </a>
 
 <div class="scan-overlay" id="scanOverlay">
@@ -763,8 +871,10 @@ const state = {
   trainingTaskId: null,
   trainingPollTimer: null,
   trainedHistory: [],
-  trainEpochs: 20,
-  trainLr: 0.001,
+  advParams: {},
+  // Inference page
+  infModels: [], infSelectedModel: null, infWeights: [], infSelectedWeight: null,
+  infImages: [], infResults: null,
 };
 
 /* ---- DOM helpers ---- */
@@ -803,11 +913,10 @@ async function checkApiStatus() {
 async function loadModels() {
   try {
     const data = await API.models();
-    state.models = data.models || data || [];
+    state.models = data.data?.models || data.models || [];
     $('#statModels').textContent = state.models.length;
     $('#modelHint').textContent = state.models.length + ' 个可用';
     renderModels();
-    populateTrainModelSelect();
   } catch (e) {
     $('#modelHint').textContent = '加载失败';
     toast('模型列表加载失败：' + e.message, 'error');
@@ -855,7 +964,7 @@ async function loadWeights(modelId) {
   $('#weightList').innerHTML = '<div class="weight-empty">加载中…</div>';
   try {
     const data = await API.weights(modelId);
-    state.weights = data.weights || data || [];
+    state.weights = data.data?.weights || data.weights || [];
     $('#weightHint').textContent = state.weights.length + ' 个权重';
     renderWeights();
     if (state.weights.length > 0 && !state.selectedWeight) selectWeight(state.weights[0].id);
@@ -912,7 +1021,7 @@ async function handleFiles(files, type) {
     fd.append('file', file); fd.append('type', type);
     if (state.selectedModel) fd.append('model', state.selectedModel);
     if (state.selectedWeight) fd.append('weight', state.selectedWeight);
-    try { const result = await API.upload(fd); state.images.push(result.image || result); }
+    try { const result = await API.upload(fd); state.images.push(result.data?.image || result.image || result); }
     catch (e) { toast(`上传失败：${file.name} — ${e.message}`, 'error'); }
   }
   toast(`成功上传 ${imgFiles.length} 张${type === 'normal' ? '正确' : '缺陷'}图片`, 'success');
@@ -989,8 +1098,12 @@ async function runPredict() {
   try {
     const payload = { model: state.selectedModel, weight: state.selectedWeight, image_ids: state.images.map(i => i.id) };
     const taskData = await API.predict(payload);
-    let result = taskData;
-    if (taskData.task_id && taskData.status !== 'done' && taskData.status !== 'completed') result = await pollTask(taskData.task_id);
+    const d = taskData.data || taskData;
+    let result = d;
+    if (taskData.task_id && taskData.status !== 'done' && taskData.status !== 'completed') {
+      const polled = await pollTask(taskData.task_id);
+      result = polled.data || polled;
+    }
     state.results = result.results || [];
     if (state.results && state.results.length) {
       const resultMap = {}; state.results.forEach(r => { resultMap[r.image_id] = r; });
@@ -1035,15 +1148,91 @@ function renderResults() {
 /* ============================================================
    Training & Export
    ============================================================ */
-function populateTrainModelSelect() {
-  const sel = $('#trainModelSelect');
-  sel.innerHTML = '<option value="">选择模型…</option>';
-  state.models.forEach(m => {
-    const opt = el('option'); opt.value = m.id; opt.textContent = m.name;
-    if (state.selectedModel === m.id) opt.selected = true;
-    sel.appendChild(opt);
+// train.py 中 parse_args() 的参数定义（名称/类型/默认/分组/帮助）
+const TRAIN_PARAMS = [
+  // YOLO
+  { name: 'yolo_epochs',        type: 'int',    def: 50,   group: 'yolo', help: 'YOLO 训练轮数' },
+  { name: 'imgsz',              type: 'int',    def: 640,  group: 'yolo', help: '输入图像尺寸' },
+  { name: 'yolo_batch_size',    type: 'int',    def: 16,   group: 'yolo', help: 'YOLO 批大小' },
+  { name: 'workers',            type: 'int',    def: 4,    group: 'yolo', help: '数据加载线程数' },
+  { name: 'patience',           type: 'int',    def: 10,   group: 'yolo', help: '早停耐心值' },
+  { name: 'freeze',             type: 'int',    def: 20,   group: 'yolo', help: '冻结主干前 N 层（0=全量微调）' },
+  { name: 'yolo_lr',            type: 'float',  def: 0.001,group: 'yolo', help: 'YOLO 初始学习率' },
+  { name: 'lrf',                type: 'float',  def: 0.1,  group: 'yolo', help: '最终学习率因子 (final=lr0*lrf)' },
+  { name: 'cos_lr',             type: 'bool',   def: true,  group: 'yolo', help: '使用 cosine 学习率衰减' },
+  { name: 'full_train',         type: 'flag',   def: false, group: 'yolo', help: '全量训练模式（不冻结 backbone）' },
+  // SAM2
+  { name: 'sam2_epochs',        type: 'int',    def: 8,    group: 'sam2', help: 'SAM2 训练轮数' },
+  { name: 'sam2_batch_size',    type: 'int',    def: 8,    group: 'sam2', help: 'SAM2 批大小' },
+  { name: 'lora_rank',          type: 'int',    def: 16,   group: 'sam2', help: 'LoRA rank' },
+  { name: 'use_dora',           type: 'bool',   def: true,  group: 'sam2', help: '是否使用 DoRA' },
+  { name: 'sam2_lr',            type: 'float',  def: 0.0002,group: 'sam2', help: 'SAM2 学习率' },
+  { name: 'weight_decay',       type: 'float',  def: 0.01,  group: 'sam2', help: '权重衰减' },
+];
+const _TRAIN_DEFAULTS = Object.fromEntries(TRAIN_PARAMS.map(p => [p.name, p.def]));
+
+function _advFieldHtml(p) {
+  const id = 'adv_' + p.name;
+  const val = state.advParams[p.name] !== undefined ? state.advParams[p.name] : p.def;
+  if (p.type === 'bool' || p.type === 'flag') {
+    const checked = val ? 'checked' : '';
+    return `<div class="adv-field${p.auto ? ' full' : ''}">
+      <label class="chk"><input type="checkbox" id="${id}" ${checked}> ${p.name}${p.auto ? '（自动）' : ''}</label>
+      <span class="help">${p.help}</span>
+    </div>`;
+  }
+  const full = p.auto ? ' full' : '';
+  const disp = p.auto ? '（自动生成，可覆盖）' : '';
+  return `<div class="adv-field${full}">
+    <label>${p.name}<span class="dv">默认 ${p.def}</span></label>
+    <input type="${p.type === 'int' || p.type === 'float' ? 'number' : 'text'}" id="${id}"
+      ${p.type === 'int' ? 'step="1"' : ''}${p.type === 'float' ? 'step="any"' : ''}
+      value="${val}">
+    <span class="help">${p.help}${disp}</span>
+  </div>`;
+}
+
+function populateAdvFields() {
+  const groups = { yolo: $('#advFieldsYolo'), sam2: $('#advFieldsSam2') };
+  for (const k in groups) groups[k].innerHTML = '';
+  TRAIN_PARAMS.forEach(p => {
+    const host = groups[p.group];
+    if (host) host.insertAdjacentHTML('beforeend', _advFieldHtml(p));
   });
-  sel.disabled = false;
+}
+
+function collectAdvParams() {
+  const out = {};
+  TRAIN_PARAMS.forEach(p => {
+    const id = 'adv_' + p.name;
+    const node = document.getElementById(id);
+    if (!node) return;
+    let v;
+    if (p.type === 'bool' || p.type === 'flag') {
+      v = node.checked;
+    } else if (p.type === 'int') {
+      v = node.value === '' ? p.def : parseInt(node.value, 10);
+    } else if (p.type === 'float') {
+      v = node.value === '' ? p.def : parseFloat(node.value);
+    } else {
+      v = node.value;
+    }
+    // 仅保留与被自动默认值不同的用户修改；auto 字段（路径类）始终保留用户输入（含空=用后端自动值）
+    if (p.auto) {
+      if (node.value !== '') out[p.name] = v; // 用户覆盖了自动路径才发送
+    } else if (String(v) !== String(p.def)) {
+      out[p.name] = v;
+    }
+  });
+  return out;
+}
+
+function openAdvModal() {
+  populateAdvFields();
+  $('#advModal').style.display = 'flex';
+}
+function closeAdvModal() {
+  $('#advModal').style.display = 'none';
 }
 
 function updateTrainSummary() {
@@ -1052,61 +1241,56 @@ function updateTrainSummary() {
   $('#tdsNormal').textContent = n + ' 张';
   $('#tdsDefect').textContent = d + ' 张';
   $('#tdsTotal').textContent = (n + d) + ' 张';
-  const est = (state.trainEpochs * 0.4).toFixed(1);
-  $('#tdsEstimate').textContent = '~' + est + 's';
-  const model = $('#trainModelSelect').value;
+  const yoloEpochs = state.advParams.yolo_epochs || _TRAIN_DEFAULTS.yolo_epochs;
+  const sam2Epochs = state.advParams.sam2_epochs || _TRAIN_DEFAULTS.sam2_epochs;
+  $('#tdsEstimate').textContent = '~' + (yoloEpochs * 0.4 + sam2Epochs * 0.4).toFixed(1) + 's';
   const hasData = (n + d) > 0;
-  $('#trainBtn').disabled = !model || !hasData || !state.online || !!state.trainingTaskId;
+  $('#trainBtn').disabled = !hasData || !state.online || !!state.trainingTaskId;
+  const changed = Object.keys(state.advParams).length > 0;
+  $('#advHint').textContent = changed ? `已自定义 ${Object.keys(state.advParams).length} 项参数` : '默认参数 · 点击可修改';
 }
 
 function setupTrainingControls() {
-  // Epoch slider
-  $('#epochSlider').addEventListener('input', (e) => {
-    state.trainEpochs = parseInt(e.target.value);
-    $('#epochVal').textContent = state.trainEpochs;
+  $('#advOptionsBtn').addEventListener('click', openAdvModal);
+  $('#advClose').addEventListener('click', closeAdvModal);
+  $('#advModal').addEventListener('click', (e) => { if (e.target === $('#advModal')) closeAdvModal(); });
+  $('#advReset').addEventListener('click', () => { state.advParams = {}; populateAdvFields(); });
+  $('#advConfirm').addEventListener('click', () => {
+    state.advParams = collectAdvParams();
+    closeAdvModal();
     updateTrainSummary();
   });
-  // LR slider (1-20 maps to 0.0001-0.002)
-  $('#lrSlider').addEventListener('input', (e) => {
-    const v = parseInt(e.target.value);
-    state.trainLr = parseFloat((v * 0.0001).toFixed(4));
-    $('#lrVal').textContent = state.trainLr.toFixed(4);
-  });
-  // Model select
-  $('#trainModelSelect').addEventListener('change', () => updateTrainSummary());
   // Train button
   $('#trainBtn').addEventListener('click', startTraining);
 }
 
 async function startTraining() {
-  const modelId = $('#trainModelSelect').value;
-  if (!modelId) { toast('请选择训练模型', 'error'); return; }
   const normalIds = state.images.filter(i => i.type === 'normal').map(i => i.id);
   const defectIds = state.images.filter(i => i.type === 'defect').map(i => i.id);
   if (normalIds.length === 0 && defectIds.length === 0) { toast('请先上传训练图片', 'error'); return; }
 
   $('#trainBtn').disabled = true;
   $('#trainProgress').classList.add('show');
-  $('#tpTotalEpoch').textContent = state.trainEpochs;
+  $('#tpTotalEpoch').textContent = state.advParams.yolo_epochs || _TRAIN_DEFAULTS.yolo_epochs;
   $('#tpEpoch').textContent = '0';
   $('#tpPct').textContent = '0%';
   $('#tpFill').style.width = '0%';
   $('#tpLoss').textContent = '—';
   $('#tpValLoss').textContent = '—';
   $('#tpAcc').textContent = '—';
+  $('#tpStage').textContent = '准备中';
 
   try {
     const payload = {
-      model: modelId,
-      epochs: state.trainEpochs,
-      lr: state.trainLr,
+      params: state.advParams,
       normal_image_ids: normalIds,
       defect_image_ids: defectIds,
     };
     const data = await API.train(payload);
-    state.trainingTaskId = data.task_id;
-    toast('训练已启动，预计 ' + data.estimated_seconds + 's', 'info');
-    pollTraining(data.task_id);
+    const d = data.data || data;
+    state.trainingTaskId = d.task_id;
+    toast('训练已启动，预计 ' + d.estimated_seconds + 's', 'info');
+    pollTraining(d.task_id);
   } catch (e) {
     toast('训练启动失败：' + e.message, 'error');
     $('#trainProgress').classList.remove('show');
@@ -1118,15 +1302,26 @@ async function pollTraining(taskId) {
   if (state.trainingPollTimer) clearInterval(state.trainingPollTimer);
   state.trainingPollTimer = setInterval(async () => {
     try {
-      const t = await API.trainStatus(taskId);
+      const resp = await API.trainStatus(taskId);
+      const t = resp.data || resp;
       // Update progress UI
       const pct = Math.round((t.progress || 0) * 100);
       $('#tpEpoch').textContent = t.current_epoch || 0;
+      $('#tpStage').textContent = t.stage || (t.status === 'training' ? '训练中' : t.status);
       $('#tpPct').textContent = pct + '%';
       $('#tpFill').style.width = pct + '%';
       if (t.loss != null) $('#tpLoss').textContent = t.loss.toFixed(4);
       if (t.val_loss != null) $('#tpValLoss').textContent = t.val_loss.toFixed(4);
       if (t.accuracy != null) $('#tpAcc').textContent = (t.accuracy * 100).toFixed(1) + '%';
+
+      if (t.status === 'error') {
+        clearInterval(state.trainingPollTimer);
+        state.trainingPollTimer = null;
+        state.trainingTaskId = null;
+        $('#trainBtn').disabled = false;
+        toast('训练失败：' + (t.error || '未知错误'), 'error');
+        return;
+      }
 
       if (t.status === 'done') {
         clearInterval(state.trainingPollTimer);
@@ -1202,6 +1397,116 @@ async function useTrainedModel(modelId, weightId) {
   }, state.selectedModel !== modelId ? 500 : 0);
 }
 
+/* ============================================================
+   Inference page (screen 3) — Model/Weight select + upload + detect
+   ============================================================ */
+async function loadInfModels() {
+  try {
+    const data = await API.models();
+    state.infModels = data.data?.models || data.models || [];
+    renderInfModels();
+  } catch (e) { toast('模型列表加载失败', 'error'); }
+}
+function renderInfModels() {
+  const grid = $('#infModelGrid'); grid.innerHTML = '';
+  state.infModels.forEach((m) => {
+    const card = el('div', 'model-card' + (state.infSelectedModel === m.id ? ' active' : ''));
+    card.innerHTML = `<div class="mc-icon">${(m.name||'').slice(0,2).toUpperCase()}</div><div class="mc-body"><div class="mc-name">${m.name}</div><div class="mc-desc">${m.description||''}</div></div><div class="mc-check"></div>`;
+    card.addEventListener('click', () => selectInfModel(m.id));
+    grid.appendChild(card);
+  });
+}
+async function selectInfModel(modelId) {
+  if (state.infSelectedModel === modelId) { state.infSelectedModel = null; state.infSelectedWeight = null; renderInfModels(); await loadInfWeights(null); infCheckReady(); return; }
+  state.infSelectedModel = modelId; state.infSelectedWeight = null; renderInfModels(); await loadInfWeights(modelId); infCheckReady();
+}
+async function loadInfWeights(modelId) {
+  if (!modelId) { state.infWeights = []; state.infSelectedWeight = null; $('#infWeightHint').textContent = '请先选择模型'; $('#infWeightList').innerHTML = '<div class="weight-empty">请先选择模型</div>'; infCheckReady(); return; }
+  $('#infWeightHint').textContent = '加载中…';
+  try {
+    const data = await API.weights(modelId);
+    state.infWeights = data.data?.weights || data.weights || [];
+    renderInfWeights();
+    if (state.infWeights.length > 0 && !state.infSelectedWeight) selectInfWeight(state.infWeights[0].id);
+  } catch (e) { toast('权重加载失败', 'error'); }
+}
+function renderInfWeights() {
+  const list = $('#infWeightList'); list.innerHTML = '';
+  if (state.infWeights.length === 0) { list.innerHTML = '<div class="weight-empty">暂无可用权重</div>'; return; }
+  state.infWeights.forEach((w) => {
+    const item = el('div', 'weight-item' + (state.infSelectedWeight === w.id ? ' active' : ''));
+    item.innerHTML = `<div class="wi-radio"></div><span class="wi-name">${w.name}</span><span class="wi-meta">${w.size_mb||''} MB</span>`;
+    item.addEventListener('click', () => selectInfWeight(w.id));
+    list.appendChild(item);
+  });
+}
+function selectInfWeight(wid) {
+  if (state.infSelectedWeight === wid) { state.infSelectedWeight = null; renderInfWeights(); infCheckReady(); return; }
+  state.infSelectedWeight = wid; renderInfWeights(); infCheckReady();
+}
+function infCheckReady() {
+  $('#infPredictBtn').disabled = !(state.infSelectedModel && state.infSelectedWeight && state.infImages.length > 0 && state.online);
+}
+
+/* Inference upload */
+function setupInfUpload() {
+  const zone = $('#zoneInference'); const input = $('#inputInference');
+  zone.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => { if (input.files.length) handleInfFiles(input.files); input.value = ''; });
+  ['dragenter','dragover'].forEach(ev => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add('dragover'); }));
+  ['dragleave','drop'].forEach(ev => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.remove('dragover'); }));
+  zone.addEventListener('drop', (e) => { if (e.dataTransfer.files.length) handleInfFiles(e.dataTransfer.files); });
+}
+async function handleInfFiles(files) {
+  const imgFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+  if (imgFiles.length === 0) { toast('请选择图片文件', 'error'); return; }
+  for (const file of imgFiles) {
+    const fd = new FormData(); fd.append('file', file); fd.append('type', 'normal');
+    try {
+      const resp = await API.upload(fd);
+      const img = resp.data?.image || resp.image || resp;
+      state.infImages.push(img);
+    } catch (e) { toast(`上传失败: ${file.name}`, 'error'); }
+  }
+  toast(`成功上传 ${imgFiles.length} 张图片`, 'success');
+  infCheckReady();
+}
+
+/* Inference predict */
+async function runInfPredict() {
+  if (!state.infSelectedModel || !state.infSelectedWeight) { toast('请先选择模型和权重', 'error'); return; }
+  if (state.infImages.length === 0) { toast('请先上传待检测图片', 'error'); return; }
+  const overlay = $('#scanOverlay');
+  $('#scanLabel').textContent = '正在执行缺陷检测…';
+  overlay.classList.add('show');
+  try {
+    const payload = { model: state.infSelectedModel, weight: state.infSelectedWeight, image_ids: state.infImages.map(i => i.id) };
+    const resp = await API.predict(payload);
+    const task = resp.data || resp;
+    state.infResults = task.results || [];
+    renderInfResults();
+    toast(`检测完成，共 ${state.infResults.length} 项结果`, 'success');
+  } catch (e) { toast('检测失败: ' + e.message, 'error'); }
+  finally { overlay.classList.remove('show'); }
+}
+function renderInfResults() {
+  const body = $('#infResultsBody'); body.innerHTML = '';
+  if (!state.infResults || state.infResults.length === 0) { body.innerHTML = '<div class="results-empty"><div>未获取到检测结果</div></div>'; return; }
+  state.infResults.forEach((r) => {
+    const row = el('div', 'result-row');
+    const verdict = r.verdict || 'normal';
+    const conf = r.confidence || 0;
+    const sevClass = r.severity === 'critical' ? 'crit' : verdict === 'defect' ? 'warn' : 'ok';
+    const vTag = verdict === 'defect' ? (r.severity === 'critical' ? '严重缺陷' : '缺陷') : '正常';
+    const img = state.infImages.find(i => i.id === r.image_id);
+    row.innerHTML = `
+      <div class="result-thumb">${img && img.url ? `<img src="${img.url}" alt="">` : ''}</div>
+      <div class="result-info"><div class="ri-name">${r.image_name || (img ? img.name : '')}</div><div class="ri-detail">${r.defect_type ? '类型: '+r.defect_type+' · ' : ''}置信度 ${(conf*100).toFixed(1)}%</div></div>
+      <div class="result-verdict"><div class="conf-bar"><div class="fill ${sevClass}" style="width:${(conf*100).toFixed(1)}%"></div></div><span class="verdict-tag ${sevClass}">${vTag}</span></div>`;
+    body.appendChild(row);
+  });
+}
+
 /* ---- Stats from API ---- */
 async function loadStats() {
   try {
@@ -1223,41 +1528,83 @@ function setupReveal() {
   items.forEach(i => io.observe(i));
 }
 
-/* ---- First/second screen scroll jumps ---- */
-function setupFirstScreenScroll() {
+/* ---- Multi-screen scroll jumps (3 screens) ---- */
+function setupMultiScreenScroll() {
   const hero = document.getElementById('heroLanding');
-  const target = document.getElementById('workspace');
+  const ws = document.getElementById('workspace');
+  const inf = document.getElementById('heroInference');
   const upCue = document.getElementById('scrollUp');
-  if (!hero || !target) return;
-  const goToSecond = () => target.scrollIntoView({ behavior: 'smooth' });
-  const goToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
-  const wsTop = () => { const r = target.getBoundingClientRect(); return r.top + window.scrollY; };
+  const upCueInf = document.getElementById('scrollUpInf');
+  if (!hero || !ws || !inf) return;
 
-  // 滚轮：首屏顶向下 → 第二屏；第二屏顶向上 → 首屏
+  // 顶栏在滚动后隐藏（body.scrolled），故第二、三屏锚点落在其真实顶部（不再扣 71px），
+  // 避免落在上一屏的 71px 余量上从而露出上一屏。首屏落在文档顶端（顶栏可见）。
+  const ANCHORS = [hero, ws, inf];
+  const anchorTops = () => ANCHORS.map((elm, i) => {
+    const top = Math.round(elm.getBoundingClientRect().top + window.scrollY);
+    return i === 0 ? 0 : top;
+  });
+  const currentIndex = () => {
+    const sy = window.scrollY;
+    const tops = anchorTops();
+    let idx = 0, best = Infinity;
+    tops.forEach((y, i) => { const d = Math.abs(sy - y); if (d < best) { best = d; idx = i; } });
+    return idx;
+  };
+  let jumpLock = false;
+  const jumpTo = (i) => {
+    jumpLock = true;
+    window.scrollTo({ top: anchorTops()[i], behavior: 'smooth' });
+    setTimeout(() => { jumpLock = false; }, 700); // 防连跳：一次手势只切一屏
+  };
+
+  // 是否处于可滚动内部容器（面板 body）且仍有滚动余量：是则放行原生滚动，不劫持
+  const inInnerScroll = (e) => {
+    let node = e.target;
+    while (node && node !== document.body) {
+      const oy = getComputedStyle(node).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && node.scrollHeight > node.clientHeight + 1) {
+        if (e.deltaY > 0 && node.scrollTop + node.clientHeight < node.scrollHeight - 1) return true;
+        if (e.deltaY < 0 && node.scrollTop > 1) return true;
+      }
+      node = node.parentElement;
+    }
+    return false;
+  };
+
+  // 滚轮：以「当前所在屏」为准，整屏吸附跳转到相邻屏
   window.addEventListener('wheel', (e) => {
-    if (window.scrollY <= 2 && e.deltaY > 0) { e.preventDefault(); goToSecond(); return; }
-    if (window.scrollY > 2 && e.deltaY < 0 && window.scrollY <= wsTop() + 4) {
-      e.preventDefault(); goToTop();
+    if (jumpLock) { e.preventDefault(); return; }
+    if (inInnerScroll(e)) return;
+    const idx = currentIndex();
+    if (e.deltaY > 0 && idx < ANCHORS.length - 1) {
+      e.preventDefault(); jumpTo(idx + 1); return;
+    }
+    if (e.deltaY < 0 && idx > 0) {
+      e.preventDefault(); jumpTo(idx - 1); return;
     }
   }, { passive: false });
 
-  // 键盘：首屏 ↓/PageDown/Space → 第二屏；第二屏顶 ↑/PageUp → 首屏
+  // 键盘：方向键 / 翻页 / 空格 在屏间跳转
   window.addEventListener('keydown', (e) => {
-    if (window.scrollY <= 2 && (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ')) {
-      e.preventDefault(); goToSecond(); return;
-    }
-    if ((e.key === 'ArrowUp' || e.key === 'PageUp') && window.scrollY > 2 && window.scrollY <= wsTop() + 4) {
-      e.preventDefault(); goToTop();
+    const tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    const idx = currentIndex();
+    if ((e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') && idx < ANCHORS.length - 1) {
+      e.preventDefault(); jumpTo(idx + 1);
+    } else if ((e.key === 'ArrowUp' || e.key === 'PageUp') && idx > 0) {
+      e.preventDefault(); jumpTo(idx - 1);
     }
   });
 
-  if (upCue) upCue.addEventListener('click', (e) => { e.preventDefault(); goToTop(); });
+  if (upCue) upCue.addEventListener('click', (e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+  if (upCueInf) upCueInf.addEventListener('click', (e) => { e.preventDefault(); jumpTo(1); });
 
-  // 滚动状态：第二屏隐藏顶栏并显示上滑键
   function onScroll() {
     const scrolled = window.scrollY > 2;
     document.body.classList.toggle('scrolled', scrolled);
     if (upCue) upCue.classList.toggle('show', scrolled);
+    if (upCueInf) upCueInf.classList.toggle('show', currentIndex() === 2); // 仅第三屏显示「回到工作区」
   }
   window.addEventListener('scroll', onScroll, { passive: true });
   onScroll();
@@ -1270,12 +1617,16 @@ async function init() {
   setupGalleryTabs();
   setupTrainingControls();
   setupReveal();
-  setupFirstScreenScroll();
+  setupMultiScreenScroll();
   $('#predictBtn').addEventListener('click', runPredict);
+
+  // Inference page setup
+  setupInfUpload();
+  $('#infPredictBtn').addEventListener('click', runInfPredict);
 
   const online = await checkApiStatus();
   if (online) {
-    await Promise.all([loadModels(), refreshImages(), loadTrainingHistory(), loadStats()]);
+    await Promise.all([loadModels(), refreshImages(), loadTrainingHistory(), loadStats(), loadInfModels()]);
   } else {
     toast('API 后端未连接，请启动后端服务', 'error');
     $('#modelHint').textContent = '离线';
@@ -1288,7 +1639,7 @@ async function init() {
 async function refreshImages() {
   try {
     const data = await API.images();
-    state.images = data.images || data || [];
+    state.images = data.data?.images || data.images || [];
     renderGallery(); updateStats(); updateTrainSummary(); checkReady();
   } catch (e) { /* silent */ }
 }
