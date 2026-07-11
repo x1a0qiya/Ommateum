@@ -1,0 +1,44 @@
+@startuml system-architecture
+
+title Ommateum 系统架构总览
+
+rectangle "用户浏览器\nskills/ommateum-api/index.html" as browser
+
+rectangle "Flask API Server  (:5000)\nskills/ommateum-api/app.py" as api {
+  rectangle "图片上传管理" as upload
+  rectangle "训练任务调度" as train_sched
+  rectangle "推理结果管理" as infer_mgr
+}
+
+package "src/ommateum 核心库" as core {
+  package "models/" as models {
+    folder "identify/\nYOLOv11" as yolo
+    folder "sam2/\nSAM2 + LoRA" as sam2
+    file "test.py" as test
+  }
+  package "services/" as services {
+    component "rag_bridge" as rag
+    component "active_learning" as al
+  }
+  package "utils/" as utils {
+    component "embedding\nCLIP/ResNet/颜色直方图" as emb
+    component "sahi\n切片推理" as sahi
+  }
+  database "database/\nchroma_client\nChromaDB 持久化客户端" as chroma
+}
+
+package "外部存储层" as storage {
+  folder "data/chromadb/\n缺陷特征向量" as chroma_data
+  folder "weights/yolo/" as weights {
+    folder "pretrained/\n预训练" as pretrained
+    folder "trained/\n微调产出" as trained
+  }
+}
+
+browser -down-> api : HTTP (RESTful JSON)
+upload -down-> core
+train_sched -down-> core
+infer_mgr -down-> core
+core -down-> storage
+
+@enduml
