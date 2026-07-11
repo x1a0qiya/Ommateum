@@ -310,7 +310,7 @@ def evaluate_sam2_miou(
         miou = np.mean(ious)
         print("\n" + "=" * 40)
         print("【 评估流程结束 】")
-        print(f"成功运行并匹配的缺陷实例总数: {len(ious)}")
+        print(f"成功运行并匹配的缺陷实例总数")
         print(f"全局平均 mIoU: {miou:.6f}")
         print("=" * 40)
         return float(miou)

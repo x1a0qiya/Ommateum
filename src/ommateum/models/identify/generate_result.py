@@ -97,7 +97,6 @@ def generate_result(
             open(txt_path, "w", encoding="utf-8").close()
 
     print(f"[完成] 推理结果已输出到: {output_dir}")
-    print(f"       共处理 {len(results)} 张图片，{written} 张有检测结果")
     return output_dir
 
 
