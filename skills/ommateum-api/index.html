@@ -57,6 +57,27 @@
   /* Motion */
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
   --dur: 200ms;
+
+  /* transitions-dev — modal / page / card-tilt tokens */
+  --modal-open-dur: 250ms;
+  --modal-close-dur: 150ms;
+  --modal-scale: 0.96;
+  --modal-scale-close: 0.96;
+  --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --page-fade-dur: 250ms;
+  --page-slide-dur: 250ms;
+  --page-slide-distance: 8px;
+  --page-blur: 3px;
+  --page-slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --page-fade-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --tilt-perspective: 1000px;
+  --tilt-return: 1000ms;
+  --tilt-return-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --tilt-follow: 400ms;
+  --tilt-follow-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --tilt-glare-opacity: 0.32;
+  --tilt-glare-fade: 300ms;
+  --tilt-glare-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -348,7 +369,7 @@ aside .btn { font-size: 15px; padding: 14px 22px; }
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
 .gallery-empty { grid-column: 1 / -1; padding: 44px 24px; text-align: center; color: var(--text-3); font-size: 14px; border: 1px dashed rgba(150, 170, 200, 0.6); border-radius: var(--r-md); background: rgba(255, 255, 255, 0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .img-card { background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.6); border-radius: var(--r-md); overflow: hidden; transition: all var(--dur) var(--ease); position: relative; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-.img-card:hover { border-color: var(--border-strong); transform: translateY(-2px); box-shadow: var(--sh-2); }
+.img-card:hover { border-color: var(--border-strong); box-shadow: var(--sh-2); }
 .img-thumb { width: 100%; aspect-ratio: 1; background: var(--bg-3); display: grid; place-items: center; overflow: hidden; position: relative; }
 .img-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .img-thumb .placeholder { color: var(--text-3); font-size: 12px; font-family: ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; }
@@ -478,8 +499,63 @@ select.field:disabled { opacity: 0.5; cursor: not-allowed; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; border: 2px solid var(--bg-0); }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
 
+/* ============================================================
+   transitions-dev — modal / page switch / card hover tilt
+   ============================================================ */
+/* ---- Modal open / close (06-modal) ---- */
+.t-modal {
+  transform-origin: center;
+  transform: scale(var(--modal-scale));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--modal-open-dur) var(--modal-ease),
+    opacity   var(--modal-open-dur) var(--modal-ease);
+  will-change: transform, opacity;
+}
+.t-modal.is-open { transform: scale(1); opacity: 1; pointer-events: auto; }
+.t-modal.is-closing {
+  transform: scale(var(--modal-scale-close)); opacity: 0; pointer-events: none;
+  transition:
+    transform var(--modal-close-dur) var(--modal-ease),
+    opacity   var(--modal-close-dur) var(--modal-ease);
+}
+
+/* ---- Page switch (08-page-side-by-side, fade/blur/rise on enter) ---- */
+.t-screen { will-change: opacity, transform, filter; transition: opacity var(--page-fade-dur) var(--page-fade-ease), transform var(--page-slide-dur) var(--page-slide-ease), filter var(--page-slide-dur) var(--page-slide-ease); }
+.t-screen.is-entering { opacity: 0; transform: translateY(14px); filter: blur(var(--page-blur)); }
+
+/* ---- Card hover tilt (19-card-tilt) ---- */
+.t-tilt { touch-action: none; width: 100%; }
+.t-tilt-card {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  transform: perspective(var(--tilt-perspective)) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
+  transform-style: preserve-3d;
+  transition: transform var(--tilt-return) var(--tilt-return-ease);
+  will-change: transform;
+}
+.t-tilt-card.is-tilting { transition: transform var(--tilt-follow) var(--tilt-follow-ease); }
+.t-tilt-glare {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: screen;
+  background:
+    radial-gradient(circle 95px at var(--tilt-gx, 50%) var(--tilt-gy, 50%), rgba(255,255,255,0.48), rgba(255,255,255,0.06) 52%, rgba(255,255,255,0) 84%),
+    radial-gradient(circle 200px at var(--tilt-gx, 50%) var(--tilt-gy, 50%), rgba(255,255,255,0.22), rgba(255,255,255,0.04) 58%, rgba(255,255,255,0) 78%),
+    radial-gradient(circle 360px at var(--tilt-gx, 50%) var(--tilt-gy, 50%), rgba(255,255,255,0.10), rgba(255,255,255,0) 88%);
+  transition: opacity var(--tilt-glare-fade) var(--tilt-glare-ease);
+}
+.t-tilt.is-hover .t-tilt-glare { opacity: var(--tilt-glare-opacity); }
+/* keep hover color/box transitions alongside tilt transform */
+.model-card.t-tilt-card,
+.img-card.t-tilt-card { transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--tilt-return) var(--tilt-return-ease); }
+.model-card.t-tilt-card.is-tilting,
+.img-card.t-tilt-card.is-tilting { transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--tilt-follow) var(--tilt-follow-ease); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  .t-tilt-card { transform: none !important; }
+  .t-screen.is-entering { opacity: 1; transform: none; filter: none; }
 }
 
 /* ============================================================
@@ -556,7 +632,7 @@ select.field:disabled { opacity: 0.5; cursor: not-allowed; }
 <div class="app">
 
   <!-- ========== HERO (first screen) ========== -->
-  <section class="hero" id="heroLanding">
+  <section class="hero t-screen" id="heroLanding">
     <div class="hero-inner">
       <h1>视觉缺陷检测 <span class="hl">训练与推理平台</span></h1>
       <div class="hero-meta">
@@ -574,7 +650,7 @@ select.field:disabled { opacity: 0.5; cursor: not-allowed; }
   </section>
 
   <!-- ========== WORKSPACE ========== -->
-  <div class="workspace" id="workspace">
+  <div class="workspace t-screen" id="workspace">
 
     <!-- ===== LEFT: CONFIG ===== -->
     <aside>
@@ -706,7 +782,7 @@ select.field:disabled { opacity: 0.5; cursor: not-allowed; }
 </div>
 
 <!-- ========== THIRD SCREEN: Inference on unclassified images ========== -->
-<section class="hero" id="heroInference" style="height:100vh;box-sizing:border-box;display:flex;flex-direction:column;padding:24px 0;">
+<section class="hero t-screen" id="heroInference" style="height:100vh;box-sizing:border-box;display:flex;flex-direction:column;padding:24px 0;">
   <div class="app">
     <div style="text-align:center;margin-bottom:32px;">
       <h1 style="font-size:clamp(26px,3.5vw,38px);font-weight:700;letter-spacing:-0.03em;color:var(--text-0);">
@@ -782,7 +858,7 @@ select.field:disabled { opacity: 0.5; cursor: not-allowed; }
 
 <!-- ========== 高级选项弹窗 ========== -->
 <div class="modal-overlay" id="advModal" style="display:none;">
-  <div class="modal">
+  <div class="modal t-modal">
     <div class="modal-head">
       <h3>训练高级选项</h3>
       <button type="button" class="modal-close" id="advClose">&times;</button>
@@ -882,6 +958,37 @@ const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if(cls) e.className = cls; if(html!=null) e.innerHTML = html; return e; };
 
+/* ---- Card hover tilt (transitions-dev 19) ---- */
+function makeTilt(wrapper) {
+  const card = wrapper.querySelector('.t-tilt-card');
+  if (!card) return;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const MAX = 10; // 峰值倾斜角度（度）
+  function reset() {
+    wrapper.classList.remove('is-hover');
+    card.classList.remove('is-tilting');
+    card.style.setProperty('--tilt-rx', '0deg');
+    card.style.setProperty('--tilt-ry', '0deg');
+  }
+  function track(e) {
+    if (reduce.matches) return;
+    const r = wrapper.getBoundingClientRect();
+    const px = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    const py = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+    wrapper.classList.add('is-hover');
+    card.classList.add('is-tilting');
+    card.style.setProperty('--tilt-ry', ((px - 0.5) * MAX).toFixed(2) + 'deg');
+    card.style.setProperty('--tilt-rx', ((0.5 - py) * MAX).toFixed(2) + 'deg');
+    card.style.setProperty('--tilt-gx', (px * 100).toFixed(1) + '%');
+    card.style.setProperty('--tilt-gy', (py * 100).toFixed(1) + '%');
+  }
+  wrapper.addEventListener('pointermove', track);
+  wrapper.addEventListener('pointerup', reset);
+  wrapper.addEventListener('pointercancel', reset);
+  wrapper.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') reset(); });
+  wrapper.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') { try { wrapper.setPointerCapture(e.pointerId); } catch (_) {} } });
+}
+
 /* ---- Toast ---- */
 function toast(msg, type = 'info') {
   const t = el('div', 'toast ' + type);
@@ -925,11 +1032,12 @@ async function loadModels() {
 function renderModels() {
   const grid = $('#modelGrid'); grid.innerHTML = '';
   state.models.forEach((m) => {
-    const card = el('div', 'model-card' + (state.selectedModel === m.id ? ' active' : ''));
+    const wrap = el('div', 't-tilt');
+    const card = el('div', 'model-card t-tilt-card' + (state.selectedModel === m.id ? ' active' : ''));
     const abbr = (m.name || m.id).slice(0, 2).toUpperCase();
-    card.innerHTML = `<div class="mc-icon">${abbr}</div><div class="mc-body"><div class="mc-name">${m.name}</div><div class="mc-desc">${m.description || m.architecture || ''}</div></div><div class="mc-check"></div>`;
+    card.innerHTML = `<div class="mc-icon">${abbr}</div><div class="mc-body"><div class="mc-name">${m.name}</div><div class="mc-desc">${m.description || m.architecture || ''}</div></div><div class="mc-check"></div><div class="t-tilt-glare"></div>`;
     card.addEventListener('click', () => selectModel(m.id));
-    grid.appendChild(card);
+    wrap.appendChild(card); grid.appendChild(wrap); makeTilt(wrap);
   });
 }
 async function selectModel(modelId) {
@@ -1037,7 +1145,8 @@ function renderGallery() {
   $('#cntDefectTab').textContent = state.images.filter(i => i.type === 'defect').length;
   if (filtered.length === 0) { gallery.innerHTML = '<div class="gallery-empty">该分类下暂无样本</div>'; return; }
   filtered.forEach((img) => {
-    const card = el('div', 'img-card');
+    const wrap = el('div', 't-tilt');
+    const card = el('div', 'img-card t-tilt-card');
     const isDefect = img.type === 'defect';
     let resultBadge = '';
     if (img.result) {
@@ -1056,7 +1165,7 @@ function renderGallery() {
       </div>
       <div class="img-meta"><span>${img.name && img.name.length > 16 ? img.name.slice(0,14)+'…' : (img.name||'')}</span><span class="conf ${confClass}">${confText}</span></div>`;
     card.querySelector('.img-del').addEventListener('click', async (e) => { e.stopPropagation(); await deleteImage(img.id); });
-    gallery.appendChild(card);
+    wrap.appendChild(card); gallery.appendChild(wrap); makeTilt(wrap);
   });
 }
 async function deleteImage(id) {
@@ -1227,12 +1336,23 @@ function collectAdvParams() {
   return out;
 }
 
+let advCloseTimer = null;
 function openAdvModal() {
   populateAdvFields();
-  $('#advModal').style.display = 'flex';
+  const m = $('#advModal');
+  if (advCloseTimer) { clearTimeout(advCloseTimer); advCloseTimer = null; }
+  m.style.display = 'flex';
+  const modal = m.querySelector('.t-modal');
+  modal.classList.remove('is-closing');
+  requestAnimationFrame(() => modal.classList.add('is-open'));
 }
 function closeAdvModal() {
-  $('#advModal').style.display = 'none';
+  const m = $('#advModal');
+  const modal = m.querySelector('.t-modal');
+  const closeMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur')) || 150;
+  modal.classList.remove('is-open');
+  modal.classList.add('is-closing');
+  advCloseTimer = setTimeout(() => { modal.classList.remove('is-closing'); m.style.display = 'none'; advCloseTimer = null; }, closeMs);
 }
 
 function updateTrainSummary() {
@@ -1410,10 +1530,11 @@ async function loadInfModels() {
 function renderInfModels() {
   const grid = $('#infModelGrid'); grid.innerHTML = '';
   state.infModels.forEach((m) => {
-    const card = el('div', 'model-card' + (state.infSelectedModel === m.id ? ' active' : ''));
-    card.innerHTML = `<div class="mc-icon">${(m.name||'').slice(0,2).toUpperCase()}</div><div class="mc-body"><div class="mc-name">${m.name}</div><div class="mc-desc">${m.description||''}</div></div><div class="mc-check"></div>`;
+    const wrap = el('div', 't-tilt');
+    const card = el('div', 'model-card t-tilt-card' + (state.infSelectedModel === m.id ? ' active' : ''));
+    card.innerHTML = `<div class="mc-icon">${(m.name||'').slice(0,2).toUpperCase()}</div><div class="mc-body"><div class="mc-name">${m.name}</div><div class="mc-desc">${m.description||''}</div></div><div class="mc-check"></div><div class="t-tilt-glare"></div>`;
     card.addEventListener('click', () => selectInfModel(m.id));
-    grid.appendChild(card);
+    wrap.appendChild(card); grid.appendChild(wrap); makeTilt(wrap);
   });
 }
 async function selectInfModel(modelId) {
@@ -1557,6 +1678,19 @@ function setupMultiScreenScroll() {
     window.scrollTo({ top: anchorTops()[i], behavior: 'smooth' });
     setTimeout(() => { jumpLock = false; }, 700); // 防连跳：一次手势只切一屏
   };
+
+  // 进入视口时重放屏幕切换过渡（transitions-dev page switch）
+  // 用双 rAF 分离「加 is-entering」与「移除」，确保过渡起点被浏览器采纳
+  const _screenIO = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      if (en.isIntersecting && en.intersectionRatio >= 0.55) {
+        const t = en.target;
+        t.classList.add('is-entering');
+        requestAnimationFrame(() => requestAnimationFrame(() => t.classList.remove('is-entering')));
+      }
+    });
+  }, { threshold: [0, 0.55, 1] });
+  ANCHORS.forEach((a) => _screenIO.observe(a));
 
   // 是否处于可滚动内部容器（面板 body）且仍有滚动余量：是则放行原生滚动，不劫持
   const inInnerScroll = (e) => {

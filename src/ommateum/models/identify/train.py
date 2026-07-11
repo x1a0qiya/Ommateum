@@ -63,15 +63,15 @@ def _ensure_pretrained(pretrained: str) -> str:
 
 def train_yolo_model(
     data_yaml : str = "dataset/data.yaml",
-    epochs : int = 50,
+    epochs : int = 100,
     imgsz : int = 640,
-    batch : int = 16,
+    batch : int = 8,
     device : Union[str, int] = "0",
     workers : int = 4,
     project : str = "runs/train",
     name : str = "exp",
-    patience : int = 10,
-    freeze : int = 20,
+    patience : int = 30,
+    freeze : int = 0,
     pretrained : str = "yolo11n.pt",
     lr0 : float = 0.001,
     lrf : float = 0.1,
@@ -79,13 +79,13 @@ def train_yolo_model(
     iou : float = 0.7,
 ) -> Results:
     """
-    训练 YOLOv11n 模型，默认使用小样本微调参数（冻结 backbone+neck + 低学习率）。
+    训练 YOLOv11 模型，默认使用小样本微调参数（冻结 backbone+neck + 低学习率）。
 
     Args:
         data_yaml (str): 数据集配置文件路径（YAML 格式）。
         epochs (int): 训练轮数。
         imgsz (int): 输入图像尺寸（像素）。
-        batch (int): 批大小，根据显存调整。
+        batch (float): 批大小，根据显存调整。
         device (str | int): 训练设备，如 "0" 表示第一块 GPU，"cpu" 表示 CPU。
         workers (int): 数据加载线程数。
         project (str): 训练输出根目录，默认 "runs/train"（图片、csv 等产物存放处）。
@@ -129,14 +129,15 @@ def train_yolo_model(
         save_period=1,
         freeze=freeze,
         verbose=True,
+        rect=True,
         # ── 学习率策略 ──
         lr0=lr0,                # 初始学习率（微调默认 0.001，比默认 0.01 低 10x）
         lrf=lrf,                # 最终 lr 因子（0.1 → final=lr0*0.1，比默认 0.01 温和）
         cos_lr=cos_lr,          # cosine 衰减（比线性衰减更平滑）
         # ── 数据增强（小数据集降低强度） ──
-        mosaic=0.0,             # 关闭 mosaic，20~100 张图经不起 4 图拼接
-        mixup=0.0,              # 关闭 mixup
-        erasing=0.0,            # 关闭随机擦除
+        mosaic=1.0,             # 关闭 mosaic，20~100 张图经不起 4 图拼接
+        mixup=0.1,              # 关闭 mixup
+        erasing=0.4,            # 关闭随机擦除
         auto_augment=None,      # 关闭 auto_augment（默认 randaugment 对小数据太激进）
         hsv_h=0.01,             # 色调增强减弱 (默认 0.015)
         hsv_s=0.3,              # 饱和度增强减弱 (默认 0.7)
@@ -169,15 +170,15 @@ def train_yolo_model(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="训练 YOLOv11 图像分割/检测模型")
     parser.add_argument("--data", default="dataset/data.yaml", help="数据集配置 YAML")
-    parser.add_argument("--epochs", type=int, default=50, help="训练轮数")
+    parser.add_argument("--epochs", type=int, default=100, help="训练轮数")
     parser.add_argument("--imgsz", type=int, default=640, help="输入图像尺寸")
-    parser.add_argument("--batch", type=int, default=16, help="批大小")
+    parser.add_argument("--batch", type=int, default=8, help="批大小")
     parser.add_argument("--device", default="0", help="设备，如 '0' 或 'cpu'")
     parser.add_argument("--workers", type=int, default=4, help="数据加载线程数")
     parser.add_argument("--project", default="runs/train", help="输出根目录（图片、csv 等）")
     parser.add_argument("--name", default="exp", help="实验子目录名，best.pt 将复制到 weights/yolo/trained/{name}_best.pt")
-    parser.add_argument("--patience", type=int, default=10, help="早停耐心值")
-    parser.add_argument("--freeze", type=int, default=20,
+    parser.add_argument("--patience", type=int, default=30, help="早停耐心值")
+    parser.add_argument("--freeze", type=int, default=0,
                         help="冻结主干前 N 层，小样本推荐 20 (0=全量微调)")
     parser.add_argument("--pretrained", default="yolo11n.pt", help="预训练权重路径")
     parser.add_argument("--lr0", type=float, default=0.001,
