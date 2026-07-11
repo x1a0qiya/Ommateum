@@ -155,8 +155,8 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-# ChromaDB 数据库文件
-data/chromadb/
+# 数据目录（含 ChromaDB 等运行时数据）
+data/
 
 # IDEs
 .vscode/
