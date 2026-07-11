@@ -16,7 +16,7 @@ except ImportError:
 
 def parse_single_label_file(label_file_path):
     """
-    解析单个 txt 文件，将文件名与其 box 坐标进行映射。
+    解析单个 txt 文件，将文件名与其所有的 box 坐标进行映射（支持多框）。
     支持格式：
     1. YOLO格式 (每行): image_name.jpg class_id x_center y_center width height (6个元素)
     2. 绝对坐标格式 (每行): image_name.jpg xmin ymin xmax ymax (5个元素)
@@ -32,7 +32,9 @@ def parse_single_label_file(label_file_path):
                 img_key = os.path.basename(parts[0])
                 try:
                     coords = [float(x) for x in parts[1:]]
-                    label_dict[img_key] = coords
+                    if img_key not in label_dict:
+                        label_dict[img_key] = []
+                    label_dict[img_key].append(coords)
                 except ValueError:
                     continue
     return label_dict
@@ -44,6 +46,7 @@ def evaluate_sam2_miou(
     model_path: str = None, #type: ignore
     lora_path: str = None, #type: ignore
     no_lora: bool = False,
+    crop_mask_by_bbox: bool = False,  # 对应训练集是否裁剪实例
     save_visualizations: bool = False,
     output_dir: str = 'eval_results',
     device: str = None, #type: ignore
@@ -51,23 +54,7 @@ def evaluate_sam2_miou(
     processor: Sam2Processor = None #type: ignore
 ) -> float:
     """
-    评估 SAM 2 模型在验证集上的 mIoU。
-
-    Args:
-        image_dir: 验证集原图文件夹路径
-        mask_dir: 验证集 Ground Truth 掩码文件夹路径
-        label_path: YOLO 标注文件夹路径，或单个包含 Box 映射的大 txt 文件路径
-        model_path: 基础 SAM 2 模型路径（当 model 和 processor 为 None 时必填）
-        lora_path: 保存的 LoRA 权重目录（可选）
-        no_lora: 是否禁用 LoRA 权重，降级运行 Base 模型
-        save_visualizations: 是否保存叠加可视化的结果
-        output_dir: 可视化结果保存目录
-        device: 运行设备 ('cuda' 或 'cpu')
-        model: 已载入内存的 Sam2Model 实例（可选，传入后将忽略 model_path 从内存直接运行）
-        processor: 已载入内存的 Sam2Processor 实例（可选）
-
-    Returns:
-        float: 评估得到的全局平均 mIoU。若未成功匹配到任何有效数据，返回 0.0
+    评估 SAM 2 模型在验证集上的 mIoU（适配多框并行机制）。
     """
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -96,7 +83,6 @@ def evaluate_sam2_miou(
         model.to(device)
         model.eval()
     else:
-        # 如果模型是由外部传入的，确保其处于 eval 模式并移动到指定设备
         model.to(device) #type: ignore
         model.eval()
 
@@ -105,7 +91,7 @@ def evaluate_sam2_miou(
     is_label_dir = os.path.isdir(label_path)
     if not is_label_dir:
         label_dict = parse_single_label_file(label_path)
-        print(f"成功读取单个 label 文件，共解析到 {len(label_dict)} 条标注记录。")
+        print(f"成功读取单个 label 文件，共解析到 {len(label_dict)} 张图片的标注。")
     
     # 3. 筛选所有图像
     supported_exts = {'.jpg', '.jpeg', '.png', '.bmp', '.webp', '.JPEG', '.JPG'}
@@ -123,49 +109,45 @@ def evaluate_sam2_miou(
     if save_visualizations:
         os.makedirs(output_dir, exist_ok=True)
         
-    # 4. 循环批处理
+    # 4. 循环处理每张图
     for img_path in tqdm(image_files, desc="Calculating mIoU"):
         img_name = os.path.basename(img_path)
         img_stem, _ = os.path.splitext(img_name)
         
-        # 4.1 提取并解析对应 bounding box 坐标
-        coords = None
-        is_yolo = False
+        # 4.1 提取并解析该图所有的 bounding box 坐标
+        parsed_boxes = []  # 存储 (coords, is_yolo) 元组的列表
         
         if is_label_dir:
-            # 如果是 YOLO 标注文件夹，寻找同名 txt
+            # 如果是 YOLO 标注文件夹，寻找同名 txt 并读取所有行（多框）
             label_file = os.path.join(label_path, f"{img_stem}.txt")
             if os.path.exists(label_file):
                 with open(label_file, 'r', encoding='utf-8') as f:
-                    lines = f.readlines()
-                if lines:
-                    parts = lines[0].strip().split() # 默认读取首个 box
-                    try:
-                        coords = [float(x) for x in parts]
-                        if len(coords) == 5:
-                            is_yolo = True
-                        elif len(coords) == 4:
-                            is_yolo = False
-                        else:
-                            coords = None
-                    except ValueError:
-                        pass
+                    for line in f:
+                        parts = line.strip().split()
+                        if len(parts) >= 4:
+                            try:
+                                coords = [float(x) for x in parts]
+                                if len(coords) == 5:
+                                    parsed_boxes.append((coords, True))
+                                elif len(coords) == 4:
+                                    parsed_boxes.append((coords, False))
+                            except ValueError:
+                                pass
         else:
-            # 从单个大 label 文件字典中匹配
+            # 从单个大 label 文件字典中匹配多个框
+            raw_coords_list = []
             if img_name in label_dict:
-                coords = label_dict[img_name]
+                raw_coords_list = label_dict[img_name]
             elif f"{img_stem}.txt" in label_dict:
-                coords = label_dict[f"{img_stem}.txt"]
+                raw_coords_list = label_dict[f"{img_stem}.txt"]
                 
-            if coords is not None:
+            for coords in raw_coords_list:
                 if len(coords) == 5:
-                    is_yolo = True
+                    parsed_boxes.append((coords, True))
                 elif len(coords) == 4:
-                    is_yolo = False
-                else:
-                    coords = None
+                    parsed_boxes.append((coords, False))
                     
-        if coords is None:
+        if not parsed_boxes:
             # 未找到对应 Box 标签，跳过此图
             continue
             
@@ -193,34 +175,53 @@ def evaluate_sam2_miou(
         if gt_img is None:
             continue
             
-        # 兼容二值图在 0/255 和 0/1 的范围
-        max_val = gt_img.max()
-        if max_val == 0:
-            gt_mask = gt_img > 0
-        elif max_val == 1:
-            gt_mask = gt_img == 1
-        else:
-            gt_mask = gt_img > (max_val / 2)
-            
-        # 4.4 坐标转换
-        if is_yolo:
-            class_id, x_center, y_center, norm_w, norm_h = coords
-            xmin = max(0, min(img_w - 1, int((x_center - norm_w / 2.0) * img_w)))
-            ymin = max(0, min(img_h - 1, int((y_center - norm_h / 2.0) * img_h)))
-            xmax = max(0, min(img_w - 1, int((x_center + norm_w / 2.0) * img_w)))
-            ymax = max(0, min(img_h - 1, int((y_center + norm_h / 2.0) * img_h)))
-        else:
-            xmin, ymin, xmax, ymax = map(int, coords)
-            xmin = max(0, min(img_w - 1, xmin))
-            ymin = max(0, min(img_h - 1, ymin))
-            xmax = max(0, min(img_w - 1, xmax))
-            ymax = max(0, min(img_h - 1, ymax))
-            
-        box_coords = [xmin, ymin, xmax, ymax]
+        # 4.4 坐标转换与 GT 掩码的实例分割裁剪（对应训练过程）
+        converted_boxes = []
+        gt_instance_masks = []
         
-        # 4.5 SAM 2 预测
-        bb = list(map(float, box_coords))
-        input_boxes = [[bb]]
+        for coords, is_yolo in parsed_boxes:
+            if is_yolo:
+                class_id, x_center, y_center, norm_w, norm_h = coords
+                xmin = max(0, min(img_w - 1, int((x_center - norm_w / 2.0) * img_w)))
+                ymin = max(0, min(img_h - 1, int((y_center - norm_h / 2.0) * img_h)))
+                xmax = max(0, min(img_w - 1, int((x_center + norm_w / 2.0) * img_w)))
+                ymax = max(0, min(img_h - 1, int((y_center + norm_h / 2.0) * img_h)))
+            else:
+                xmin, ymin, xmax, ymax = map(int, coords)
+                xmin = max(0, min(img_w - 1, xmin))
+                ymin = max(0, min(img_h - 1, ymin))
+                xmax = max(0, min(img_w - 1, xmax))
+                ymax = max(0, min(img_h - 1, ymax))
+                
+            box_coords = [xmin, ymin, xmax, ymax]
+            converted_boxes.append(box_coords)
+            
+            # 为该 BBox 提取对应的 Ground Truth 实例分割区域
+            if gt_img.max() > 0 and gt_img.max() <= 10:
+                # 兼容类别图
+                target_pixel_val = int(class_id) + 1 if is_yolo else 1
+                binary_mask = (gt_img == target_pixel_val).astype(np.uint8)
+            else:
+                # 兼容常规二值图
+                binary_mask = (gt_img > 127).astype(np.uint8) if gt_img.max() > 1 else (gt_img > 0).astype(np.uint8)
+                
+            if crop_mask_by_bbox:
+                # 裁剪框外部的 Mask 区域（实现实例级对齐）
+                h_img, w_img = binary_mask.shape
+                x1, y1, x2, y2 = map(int, box_coords)
+                x1, y1 = max(0, x1), max(0, y1)
+                x2, y2 = min(w_img, x2), min(h_img, y2)
+                
+                refined_mask = np.zeros_like(binary_mask)
+                refined_mask[y1:y2, x1:x2] = binary_mask[y1:y2, x1:x2]
+                gt_instance_masks.append(refined_mask > 0)
+            else:
+                gt_instance_masks.append(binary_mask > 0)
+            
+        # 4.5 SAM 2 预测（所有 BBox 一起送入模型）
+        bb_floats = [list(map(float, box)) for box in converted_boxes]
+        input_boxes = [bb_floats]  # 包装为 [1, num_boxes, 4] 形状
+        
         inputs = processor(
             images=raw_image, 
             input_boxes=input_boxes, 
@@ -235,54 +236,72 @@ def evaluate_sam2_miou(
             outputs.pred_masks.cpu(), 
             inputs["original_sizes"].cpu()
         )
-        binary_mask = masks[0][0][0].numpy()
         
-        # 转换并确保预测掩码与 Ground Truth 掩码的分辨率完全匹配
-        binary_mask_uint8 = (binary_mask > 0.5).astype(np.uint8)
-        if binary_mask_uint8.shape != gt_mask.shape:
-            binary_mask_uint8 = cv2.resize(
-                binary_mask_uint8, 
-                (gt_mask.shape[1], gt_mask.shape[0]), 
-                interpolation=cv2.INTER_NEAREST
-            )
+        # 4.6 循环计算每一个预测框的 IoU 并存入列表
+        # masks[0] 形状为 [num_boxes, 1, H_orig, W_orig]
+        pred_masks_list = []
+        for idx_box in range(len(converted_boxes)):
+            binary_mask = masks[0][idx_box][0].numpy()
             
-        pred_mask = binary_mask_uint8 > 0.5
-        
-        # 4.6 计算 IoU
-        intersection = np.logical_and(pred_mask, gt_mask).sum()
-        union = np.logical_or(pred_mask, gt_mask).sum()
-        
-        if union == 0:
-            iou = 1.0  # 如果两张掩码均为空白，IoU 为 1.0
-        else:
-            iou = intersection / union
+            # 确保分辨率匹配
+            binary_mask_uint8 = (binary_mask > 0.5).astype(np.uint8)
+            gt_inst = gt_instance_masks[idx_box]
+            if binary_mask_uint8.shape != gt_inst.shape:
+                binary_mask_uint8 = cv2.resize(
+                    binary_mask_uint8, 
+                    (gt_inst.shape[1], gt_inst.shape[0]), 
+                    interpolation=cv2.INTER_NEAREST
+                )
+                
+            pred_mask = binary_mask_uint8 > 0.5
+            pred_masks_list.append(pred_mask)
             
-        ious.append(iou)
+            # 计算该实例的 IoU
+            intersection = np.logical_and(pred_mask, gt_inst).sum()
+            union = np.logical_or(pred_mask, gt_inst).sum()
+            
+            if union == 0:
+                iou = 1.0
+            else:
+                iou = intersection / union
+                
+            ious.append(iou)
         
-        # 4.7 可视化部分
+        # 4.7 可视化部分（保存包含全图多个掩码的叠加图像）
         if save_visualizations:
             img_cv = cv2.imread(img_path)
             if img_cv is not None:
-                if (img_cv.shape[0], img_cv.shape[1]) != pred_mask.shape:
-                    img_cv = cv2.resize(img_cv, (gt_mask.shape[1], gt_mask.shape[0]))
+                h_gt, w_gt = gt_img.shape
+                if (img_cv.shape[0], img_cv.shape[1]) != (h_gt, w_gt):
+                    img_cv = cv2.resize(img_cv, (w_gt, h_gt))
                     
                 overlay = img_cv.copy()
-                mask_color = [0, 255, 0]  # SAM 2 预测结果 (绿色)
-                gt_color = [255, 0, 0]    # Ground Truth 实际掩码 (蓝色)
+                mask_color = [0, 255, 0]  # SAM 2 预测结果 (绿色并集)
+                gt_color = [255, 0, 0]    # Ground Truth 实际掩码 (蓝色并集)
                 opacity = 0.4
                 
-                overlay[pred_mask] = (img_cv[pred_mask] * (1.0 - opacity) + np.array(mask_color) * opacity).astype(np.uint8)
-                overlay[gt_mask] = (overlay[gt_mask] * (1.0 - opacity) + np.array(gt_color) * opacity).astype(np.uint8)
+                # 计算预测掩码和 GT 掩码的整体并集，用于可视化显示
+                union_pred = np.zeros((h_gt, w_gt), dtype=bool)
+                union_gt = np.zeros((h_gt, w_gt), dtype=bool)
+                for idx_box in range(len(converted_boxes)):
+                    union_pred = np.logical_or(union_pred, pred_masks_list[idx_box])
+                    union_gt = np.logical_or(union_gt, gt_instance_masks[idx_box])
                 
-                scale_x = gt_mask.shape[1] / img_w
-                scale_y = gt_mask.shape[0] / img_h
-                cv2.rectangle(
-                    overlay, 
-                    (int(xmin * scale_x), int(ymin * scale_y)), 
-                    (int(xmax * scale_x), int(ymax * scale_y)), 
-                    (0, 0, 255), 
-                    2
-                )
+                overlay[union_pred] = (img_cv[union_pred] * (1.0 - opacity) + np.array(mask_color) * opacity).astype(np.uint8)
+                overlay[union_gt] = (overlay[union_gt] * (1.0 - opacity) + np.array(gt_color) * opacity).astype(np.uint8)
+                
+                # 绘制所有检测框
+                scale_x = w_gt / img_w
+                scale_y = h_gt / img_h
+                for box in converted_boxes:
+                    xmin, ymin, xmax, ymax = box
+                    cv2.rectangle(
+                        overlay, 
+                        (int(xmin * scale_x), int(ymin * scale_y)), 
+                        (int(xmax * scale_x), int(ymax * scale_y)), 
+                        (0, 0, 255), 
+                        2
+                    )
                 
                 cv2.imwrite(os.path.join(output_dir, f"res_{img_name}"), overlay)
 
@@ -291,7 +310,7 @@ def evaluate_sam2_miou(
         miou = np.mean(ious)
         print("\n" + "=" * 40)
         print("【 评估流程结束 】")
-        print(f"成功运行并匹配的图像总数: {len(ious)}")
+        print(f"成功运行并匹配的缺陷实例总数: {len(ious)}")
         print(f"全局平均 mIoU: {miou:.6f}")
         print("=" * 40)
         return float(miou)
@@ -310,7 +329,7 @@ def parse_args():
     parser.add_argument('--model_path', type=str, required=True, help='Path or HF repository name of the base SAM2 model')
     parser.add_argument('--lora_path', type=str, default=None, help='Path to the saved LoRA adapter directory')
     parser.add_argument('--no_lora', action='store_true', help='If set, run base model instead of LoRA')
-    
+    parser.add_argument('--crop_mask_by_bbox', action='store_true', help='Whether to crop ground truth mask by bbox')    
     parser.add_argument('--save_visualizations', action='store_true', help='If set, save overlay results to output_dir')
     parser.add_argument('--output_dir', type=str, default='eval_results', help='Directory to save visualization results')
     
@@ -328,6 +347,7 @@ if __name__ == "__main__":
         model_path=args.model_path,
         lora_path=args.lora_path,
         no_lora=args.no_lora,
+        crop_mask_by_bbox=args.crop_mask_by_bbox,
         save_visualizations=args.save_visualizations,
         output_dir=args.output_dir,
         device=args.device
