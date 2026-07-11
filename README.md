@@ -86,7 +86,7 @@ python app.py
 | `POST /api/predict` | 执行缺陷检测 |
 | `GET /api/stats` | 数据集与训练统计 |
 
-完整 API 文档见 [skills/ommateum-api/API.md](skills/ommateum-api/API.md)。
+完整 API 文档见 [docs/API.md](docs/API.md)。
 
 ## 项目结构
 
