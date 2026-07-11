@@ -1,32 +1,36 @@
 # Ommateum API 文档
-
-> 视觉缺陷检测平台 — RESTful API 接口规范 v2.0.0
-
 ---
-
 ## 目录
 
-- [基本信息](#基本信息)
-- [通用约定](#通用约定)
-- [API 总览](#api-总览)
-- [详细接口说明](#详细接口说明)
-  - [1. 健康检查](#1-健康检查)
-  - [2. 获取模型列表](#2-获取模型列表)
-  - [3. 获取权重列表](#3-获取权重列表)
-  - [4. 获取图片列表](#4-获取图片列表)
-  - [5. 上传图片](#5-上传图片)
-  - [6. 删除图片](#6-删除图片)
-  - [7. 执行缺陷检测](#7-执行缺陷检测)
-  - [8. 查询检测任务结果](#8-查询检测任务结果)
-  - [9. 启动训练](#9-启动训练)
-  - [10. 查询训练进度](#10-查询训练进度)
-  - [11. 获取训练历史](#11-获取训练历史)
-  - [12. 导出训练模型](#12-导出训练模型)
-  - [13. 数据统计](#13-数据统计)
-  - [14. 获取静态文件](#14-获取静态文件)
-  - [15. API 索引](#15-api-索引)
-- [错误处理](#错误处理)
-- [常见用法示例](#常见用法示例)
+- [Ommateum API 文档](#ommateum-api-文档)
+  - [目录](#目录)
+  - [基本信息](#基本信息)
+  - [通用约定](#通用约定)
+    - [认证](#认证)
+    - [成功响应格式](#成功响应格式)
+    - [错误响应格式](#错误响应格式)
+    - [HTTP 状态码](#http-状态码)
+  - [API 总览](#api-总览)
+  - [详细接口说明](#详细接口说明)
+    - [1. 健康检查](#1-健康检查)
+    - [2. 获取模型列表](#2-获取模型列表)
+    - [3. 获取权重列表](#3-获取权重列表)
+    - [4. 获取图片列表](#4-获取图片列表)
+    - [5. 上传图片](#5-上传图片)
+    - [6. 删除图片](#6-删除图片)
+    - [7. 执行缺陷检测](#7-执行缺陷检测)
+    - [8. 查询检测任务结果](#8-查询检测任务结果)
+    - [9. 启动训练](#9-启动训练)
+    - [10. 查询训练进度](#10-查询训练进度)
+    - [11. 获取训练历史](#11-获取训练历史)
+    - [12. 导出训练模型](#12-导出训练模型)
+    - [13. 数据统计](#13-数据统计)
+    - [14. 获取静态文件](#14-获取静态文件)
+    - [15. API 索引](#15-api-索引)
+  - [错误处理](#错误处理)
+    - [常见错误码](#常见错误码)
+    - [错误响应格式](#错误响应格式-1)
+    - [前端错误处理示例](#前端错误处理示例)
 
 ---
 
@@ -53,20 +57,24 @@
 ```json
 {
   "status": "ok",
-  "message": "操作成功（可选）",
+  "timestamp": "2026-07-11T01:23:45+00:00",
   "data": { ... }
 }
 ```
+
+> 所有响应均含 `timestamp`（ISO 8601 UTC）。`message` 字段仅个别接口（如上传成功）返回，并非每个接口都有。
 
 ### 错误响应格式
 
 ```json
 {
   "status": "error",
-  "message": "具体的错误描述",
-  "code": 400
+  "error": "具体的错误描述",
+  "timestamp": "2026-07-11T01:23:45+00:00"
 }
 ```
+
+> 错误类型由 **HTTP 状态码**区分，响应体中**不含 `code` 字段**（前端应读取 `error` 字段，而非 `message`）。
 
 ### HTTP 状态码
 
@@ -125,19 +133,23 @@ curl http://localhost:5000/api/health
   "status": "ok",
   "data": {
     "service": "Ommateum API",
-    "version": "2.0.0",
-    "models": 5,
+    "version": "2.0.1",
+    "models": 1,
     "images": 12,
-    "trained_weights": 2
+    "trained_weights": 0,
+    "rag_available": true
   }
 }
 ```
+
+> 以上数值为运行时实时计数（随上传/训练变化），示例仅供参考。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `models` | number | 可用模型数量 |
 | `images` | number | 已上传图片总数 |
 | `trained_weights` | number | 已训练权重数量 |
+| `rag_available` | boolean | 后端是否已集成 Ommateum RAG / Embedding 模块 |
 
 ---
 
@@ -163,15 +175,14 @@ curl http://localhost:5000/api/models
   "data": {
     "models": [
       {
-        "id": "patchcore",
-        "name": "PatchCore",
-        "description": "基于 WideResNet50 + Coreset 采样的特征记忆方法",
-        "architecture": "WideResNet50 + Coreset",
-        "input_size": [224, 224],
-        "category": "feature-bank"
+        "id": "yolov11",
+        "name": "YOLOv11",
+        "description": "轻量级实时目标检测与分割",
+        "architecture": "Ultralytics YOLOv11",
+        "input_size": [640, 640]
       }
     ],
-    "total": 5
+    "total": 1
   }
 }
 ```
@@ -183,7 +194,6 @@ curl http://localhost:5000/api/models
 | `models[].description` | string | 模型简介 |
 | `models[].architecture` | string | 网络架构描述 |
 | `models[].input_size` | number[] | 输入图片尺寸 `[宽, 高]` |
-| `models[].category` | string | 模型分类 |
 | `total` | number | 模型总数 |
 
 ---
@@ -200,12 +210,12 @@ GET /api/weights?model={model_id}
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `model` | string | 是 | 模型 ID，如 `patchcore` |
+| `model` | string | 是 | 模型 ID，如 `yolov11` |
 
 **请求示例**：
 
 ```bash
-curl "http://localhost:5000/api/weights?model=patchcore"
+curl "http://localhost:5000/api/weights?model=yolov11"
 ```
 
 **响应示例**：
@@ -214,24 +224,26 @@ curl "http://localhost:5000/api/weights?model=patchcore"
 {
   "status": "ok",
   "data": {
-    "model": "patchcore",
+    "model": "yolov11",
     "weights": [
       {
-        "id": "patchcore_mvtec",
-        "name": "MVTec AD 预训练权重",
-        "size_mb": 182.5,
+        "id": "yolov11n-default",
+        "name": "yolo11n 默认权重",
+        "size_mb": 5.4,
+        "accuracy": 0.952,
         "trained": false
       },
       {
         "id": "trained_abc123",
         "name": "用户训练权重 · 30正常+15缺陷 · 20epoch",
         "size_mb": 85.3,
-        "dataset": "用户数据 (30正常 + 15缺陷)",
         "accuracy": 0.937,
+        "dataset": "用户数据 (30正常 + 15缺陷)",
         "trained": true,
         "task_id": "train_abc123",
         "epochs": 20,
         "lr": 0.001,
+        "path": "/models/trained_abc123.pt",
         "created_at": "2026-07-08T12:00:00Z"
       }
     ],
@@ -247,11 +259,13 @@ curl "http://localhost:5000/api/weights?model=patchcore"
 | `weights[].id` | string | 权重唯一标识符 |
 | `weights[].name` | string | 权重名称 |
 | `weights[].size_mb` | number | 文件大小（MB） |
+| `weights[].accuracy` | number | 权重准确率（预置与训练产出均包含） |
 | `weights[].trained` | boolean | 是否为用户训练产出 |
-| `weights[].accuracy` | number | （训练权重）准确率 |
+| `weights[].dataset` | string | （训练权重）训练所用数据集描述 |
 | `weights[].task_id` | string | （训练权重）关联的训练任务 ID |
 | `weights[].epochs` | number | （训练权重）训练轮数 |
 | `weights[].lr` | number | （训练权重）学习率 |
+| `weights[].path` | string | （训练权重）权重文件相对路径 |
 | `weights[].created_at` | string | （训练权重）创建时间 ISO 8601 |
 
 ---
@@ -419,7 +433,7 @@ const data = await res.json();
 
 ### 7. 执行缺陷检测
 
-对指定图片执行缺陷检测推理（当前为 Mock 模拟，替换后端逻辑后前端零改动）。
+对指定图片执行缺陷检测推理。后端会调用真实的 YOLO 检测（`models/identify/generate_result.py`）与可选的 SAM2 分割评估（`models/sam2/test.py`，需配置 `OMMATEUM_SAM2_MODEL` 等环境变量），并将结果写入 RAG（ChromaDB）。
 
 ```
 POST /api/predict
@@ -430,8 +444,8 @@ Content-Type: application/json
 
 ```json
 {
-  "model": "patchcore",
-  "weight": "patchcore_mvtec",
+  "model": "yolov11",
+  "weight": "yolov11n-default",
   "image_ids": ["img_a1b2c3d4", "img_e5f6g7h8"]
 }
 ```
@@ -441,13 +455,16 @@ Content-Type: application/json
 | `model` | string | 是 | 模型 ID |
 | `weight` | string | 是 | 权重 ID |
 | `image_ids` | string[] | 是 | 待检测图片 ID 列表 |
+| `conf` | number | 否 | 置信度阈值，默认 `0.25` |
+| `iou` | number | 否 | NMS IoU 阈值，默认 `0.7` |
+| `imgsz` | number | 否 | 推理输入尺寸，默认 `640` |
 
 **请求示例**：
 
 ```bash
 curl -X POST http://localhost:5000/api/predict \
   -H "Content-Type: application/json" \
-  -d '{"model":"patchcore","weight":"patchcore_mvtec","image_ids":["img_a1b2c3d4","img_e5f6g7h8"]}'
+  -d '{"model":"yolov11","weight":"yolov11n-default","image_ids":["img_a1b2c3d4","img_e5f6g7h8"]}'
 ```
 
 **响应示例**：
@@ -466,7 +483,7 @@ curl -X POST http://localhost:5000/api/predict \
         "confidence": 0.962,
         "severity": null,
         "defect_type": null,
-        "score_map_url": "/api/files/score_img_a1b2c3d4.png",
+        "score_map_url": "/api/files/img_a1b2c3d4_score.png",
         "processing_ms": 47.2,
         "expected_verdict": "normal"
       },
@@ -477,7 +494,7 @@ curl -X POST http://localhost:5000/api/predict \
         "confidence": 0.937,
         "severity": "medium",
         "defect_type": "scratch",
-        "score_map_url": "/api/files/score_img_e5f6g7h8.png",
+        "score_map_url": "/api/files/img_e5f6g7h8_score.png",
         "processing_ms": 51.8,
         "expected_verdict": "defect"
       }
@@ -498,9 +515,11 @@ curl -X POST http://localhost:5000/api/predict \
 |------|------|------|
 | `results[].image_id` | string | 图片 ID |
 | `results[].image_name` | string | 图片文件名 |
+| `results[].model` | string | 实际使用的模型 ID |
+| `results[].weight` | string | 实际使用的权重 ID |
 | `results[].verdict` | string | 判定结果：`normal`（正常）或 `defect`（缺陷） |
 | `results[].confidence` | number | 置信度，范围 0~1 |
-| `results[].severity` | string\|null | 严重程度：`light` / `medium` / `critical`，正常时为 `null` |
+| `results[].severity` | string\|null | 严重程度：`medium`（默认）/ `critical`（confidence > 0.93），正常时为 `null` |
 | `results[].defect_type` | string\|null | 缺陷类型：如 `scratch`、`dent`、`crack` 等 |
 | `results[].score_map_url` | string\|null | 热力图 URL（如支持） |
 | `results[].processing_ms` | number | 单张处理耗时（毫秒） |
@@ -509,6 +528,7 @@ curl -X POST http://localhost:5000/api/predict \
 | `summary.defect_count` | number | 缺陷数 |
 | `summary.normal_count` | number | 正常数 |
 | `summary.accuracy` | number | 整体准确率 |
+| `summary.sam2_miou` | number\|null | SAM2 分割评估 mIoU（未配置 SAM2 时为 `null`） |
 
 **前端 JavaScript 调用方式**：
 
@@ -517,8 +537,8 @@ const res = await fetch('/api/predict', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    model: 'patchcore',
-    weight: 'patchcore_mvtec',
+    model: 'yolov11',
+    weight: 'yolov11n-default',
     image_ids: ['img_a1b2c3d4', 'img_e5f6g7h8']
   })
 });
@@ -557,8 +577,8 @@ curl http://localhost:5000/api/tasks/task_a1b2c3d4e5f6
   "data": {
     "id": "task_a1b2c3d4e5f6",
     "status": "done",
-    "model": "patchcore",
-    "weight": "patchcore_mvtec",
+    "model": "yolov11",
+    "weight": "yolov11n-default",
     "image_ids": ["img_a1b2c3d4", "img_e5f6g7h8"],
     "results": [],
     "created_at": "2026-07-08T12:00:00Z",
@@ -588,9 +608,12 @@ Content-Type: application/json
 
 ```json
 {
-  "model": "patchcore",
-  "epochs": 20,
-  "lr": 0.001,
+  "params": {
+    "yolo_epochs": 50,
+    "sam2_epochs": 8,
+    "yolo_lr": 0.001,
+    "pretrained": "yolo11n.pt"
+  },
   "normal_image_ids": ["img_n1", "img_n2"],
   "defect_image_ids": ["img_d1", "img_d2"]
 }
@@ -598,18 +621,22 @@ Content-Type: application/json
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `model` | string | 是 | 模型 ID |
-| `epochs` | number | 否 | 训练轮数，范围 1~200，默认 20 |
-| `lr` | number | 否 | 学习率，默认 0.001 |
-| `normal_image_ids` | string[] | 是 | 正常样本图片 ID 列表 |
-| `defect_image_ids` | string[] | 是 | 缺陷样本图片 ID 列表 |
+| `params` | object | 否 | 训练超参容器（见下） |
+| `params.yolo_epochs` | number | 否 | YOLO 训练轮数，范围 1~200，默认 `50` |
+| `params.sam2_epochs` | number | 否 | SAM2 训练轮数，默认 `8`（需配置 SAM2 才生效） |
+| `params.yolo_lr` | number | 否 | YOLO 学习率，默认 `0.001` |
+| `params.pretrained` | string | 否 | 预训练权重名，默认 `yolo11n.pt` |
+| `normal_image_ids` | string[] | 是 | 正常样本图片 ID 列表（至少 1 张） |
+| `defect_image_ids` | string[] | 是 | 缺陷样本图片 ID 列表（至少 1 张） |
+
+> 至少需要一张训练图片（正常或缺陷均可）。`yolo_epochs` 越界（<1 或 >200）会返回 400。
 
 **请求示例**：
 
 ```bash
 curl -X POST http://localhost:5000/api/train \
   -H "Content-Type: application/json" \
-  -d '{"model":"patchcore","epochs":20,"lr":0.001,"normal_image_ids":["img_n1"],"defect_image_ids":["img_d1"]}'
+  -d '{"params":{"yolo_epochs":50,"yolo_lr":0.001},"normal_image_ids":["img_n1"],"defect_image_ids":["img_d1"]}'
 ```
 
 **响应示例**：
@@ -620,11 +647,10 @@ curl -X POST http://localhost:5000/api/train \
   "data": {
     "task_id": "train_a1b2c3d4e5f6",
     "status": "training",
-    "epochs": 20,
-    "model": "patchcore",
+    "epochs": 50,
     "normal_count": 1,
     "defect_count": 1,
-    "estimated_seconds": 8.0
+    "estimated_seconds": 23.2
   }
 }
 ```
@@ -642,9 +668,7 @@ const res = await fetch('/api/train', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    model: 'patchcore',
-    epochs: 20,
-    lr: 0.001,
+    params: { yolo_epochs: 50, yolo_lr: 0.001 },
     normal_image_ids: ['img_n1'],
     defect_image_ids: ['img_d1']
   })
@@ -685,7 +709,7 @@ curl http://localhost:5000/api/train/train_a1b2c3d4e5f6
   "data": {
     "id": "train_a1b2c3d4e5f6",
     "status": "training",
-    "model": "patchcore",
+    "model": "yolov11",
     "current_epoch": 7,
     "progress": 0.35,
     "loss": 0.4532,
@@ -711,7 +735,7 @@ curl http://localhost:5000/api/train/train_a1b2c3d4e5f6
   "data": {
     "id": "train_a1b2c3d4e5f6",
     "status": "done",
-    "model": "patchcore",
+    "model": "yolov11",
     "current_epoch": 20,
     "progress": 1.0,
     "loss": 0.0183,
@@ -729,12 +753,13 @@ curl http://localhost:5000/api/train/train_a1b2c3d4e5f6
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `status` | string | `training`（训练中）或 `done`（已完成） |
+| `status` | string | `training`（训练中）/ `done`（已完成）/ `error`（失败） |
+| `stage` | string | 当前阶段：`准备中` / `YOLO 训练` / `SAM2 训练` |
 | `current_epoch` | number | 当前训练轮数 |
 | `progress` | number | 进度，范围 0~1.0 |
 | `loss` | number | 当前训练损失 |
 | `val_loss` | number | 当前验证损失 |
-| `accuracy` | number | 当前准确率 |
+| `accuracy` | number | 当前准确率（mAP@0.5） |
 | `weight_id` | string\|null | 训练完成后的权重 ID，未完成时为 `null` |
 | `final_accuracy` | number\|null | 最终准确率，仅 `done` 时有值 |
 | `completed_at` | string\|null | 完成时间 ISO 8601 |
@@ -789,7 +814,7 @@ curl http://localhost:5000/api/training-history
     "tasks": [
       {
         "id": "train_a1b2c3d4e5f6",
-        "model": "patchcore",
+        "model": "yolov11",
         "status": "done",
         "epochs": 20,
         "current_epoch": 20,
@@ -849,7 +874,7 @@ curl -OJ http://localhost:5000/api/export/train_a1b2c3d4e5f6
 ```javascript
 const a = document.createElement('a');
 a.href = '/api/export/train_a1b2c3d4e5f6';
-a.download = 'ommateum_PatchCore_trained_b0ae95ef.omt';
+a.download = 'ommateum_YOLOv11_trained_b0ae95ef.omt';
 document.body.appendChild(a);
 a.click();
 document.body.removeChild(a);
@@ -899,6 +924,7 @@ curl http://localhost:5000/api/stats
 | `trained_weights` | number | 已训练权重数 |
 | `training_tasks` | number | 训练任务总数 |
 | `recent_accuracy` | number | 最近平均检测准确率 |
+| `rag_records` | number | RAG（ChromaDB）中已索引的缺陷记录数 |
 
 ---
 
@@ -907,19 +933,23 @@ curl http://localhost:5000/api/stats
 获取图片或模型文件。
 
 ```
-GET /api/files/{filename}
+GET /api/files/{type}/{filename}     # 推荐：明确图片类别
+GET /api/files/{filename}            # 兼容：自动在 normal / defect / models 目录中查找
 ```
 
 **路径参数**：
 
 | 参数 | 说明 |
 |------|------|
+| `type` | 可选，图片类别 `normal` 或 `defect` |
 | `filename` | 文件名，如 `img_a1b2c3d4.jpg` |
+
+> 上传图片返回的 `url` 即为 `/api/files/{type}/{filename}` 形式。
 
 直接返回二进制文件。前端中可直接用于 `<img>` 标签：
 
 ```html
-<img src="/api/files/img_a1b2c3d4.jpg">
+<img src="/api/files/normal/img_a1b2c3d4.jpg">
 ```
 
 ---
@@ -939,7 +969,7 @@ GET /api
   "status": "ok",
   "data": {
     "service": "Ommateum Visual Defect Detection API",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "endpoints": {
       "GET    /api/health": "健康检查",
       "GET    /api/models": "获取可用模型列表",
@@ -968,18 +998,18 @@ GET /api
 
 | HTTP 状态码 | 错误原因 | 示例 message |
 |------------|----------|-------------|
-| `400` | 请求参数缺失或无效 | `"缺少 model 参数"` / `"epochs 范围 1-200"` |
-| `404` | 资源不存在 | `"模型 'xxx' 不存在"` / `"图片不存在"` |
+| `400` | 请求参数缺失或无效 | `"缺少 model 参数"` / `"yolo_epochs 范围 1-200"` / `"type 必须为 normal 或 defect"` |
+| `404` | 资源不存在 | `"模型 'xxx' 不存在"` / `"图片不存在"` / `"训练任务不存在"` |
 | `413` | 文件过大 | `"文件过大（最大 32MB）"` |
-| `500` | 服务端内部错误 | `"图片保存失败: ..."` |
+| `500` | 服务端内部错误 | `"检测执行失败: ..."` / `"训练任务 xxx 失败: ..."` |
 
 ### 错误响应格式
 
 ```json
 {
   "status": "error",
-  "message": "具体的错误描述",
-  "code": 400
+  "error": "具体的错误描述",
+  "timestamp": "2026-07-11T01:23:45+00:00"
 }
 ```
 
@@ -991,81 +1021,11 @@ async function apiCall(url, options) {
   const data = await res.json();
 
   if (data.status === 'error') {
-    console.error(`[API Error ${data.code}] ${data.message}`);
-    throw new Error(data.message);
+    console.error(`[API ${res.status}] ${data.error}`);
+    throw new Error(data.error);
   }
   return data.data;
 }
 ```
 
 ---
-
-## 常见用法示例
-
-### 完整工作流
-
-```javascript
-// 1. 检查服务状态
-const health = await (await fetch('/api/health')).json();
-if (health.status !== 'ok') return;
-
-// 2. 获取模型列表
-const models = (await (await fetch('/api/models')).json()).data.models;
-
-// 3. 获取指定模型的权重
-const weights = (await (await fetch(`/api/weights?model=${models[0].id}`)).json()).data.weights;
-
-// 4. 上传图片
-const fd = new FormData();
-fd.append('file', fileInput.files[0]);
-fd.append('type', 'normal');
-const upload = await (await fetch('/api/images', { method: 'POST', body: fd })).json();
-const newImage = upload.data.image;
-
-// 5. 执行检测
-const predict = await (await fetch('/api/predict', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    model: models[0].id,
-    weight: weights[0].id,
-    image_ids: [newImage.id]
-  })
-})).json();
-const results = predict.data.results;
-
-// 6. 查看统计
-const stats = (await (await fetch('/api/stats')).json()).data;
-```
-
-### cURL 速查
-
-```bash
-# 健康检查
-curl http://localhost:5000/api/health
-
-# 上传正常图片
-curl -X POST http://localhost:5000/api/images -F "file=@good.jpg" -F "type=normal"
-
-# 上传缺陷图片
-curl -X POST http://localhost:5000/api/images -F "file=@bad.jpg" -F "type=defect"
-
-# 检测
-curl -X POST http://localhost:5000/api/predict \
-  -H "Content-Type: application/json" \
-  -d '{"model":"patchcore","weight":"patchcore_mvtec","image_ids":["img_xxx"]}'
-
-# 启动训练
-curl -X POST http://localhost:5000/api/train \
-  -H "Content-Type: application/json" \
-  -d '{"model":"patchcore","epochs":20,"lr":0.001,"normal_image_ids":["img_n1"],"defect_image_ids":["img_d1"]}'
-
-# 查询训练进度
-curl http://localhost:5000/api/train/train_xxx
-
-# 导出模型
-curl -OJ http://localhost:5000/api/export/train_xxx
-
-# 统计
-curl http://localhost:5000/api/stats
-```

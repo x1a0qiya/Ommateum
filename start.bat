@@ -30,8 +30,7 @@ if %ERRORLEVEL% NEQ 0 (
 :: ---------- 第二步：安装 API 依赖 ----------
 echo.
 echo [2/3] 安装 API 服务器依赖...
-cd /d "%SCRIPT_DIR%skills\ommateum-api"
-pip install -r requirements.txt -q
+pip install -r requirements-dev.txt -q
 if %ERRORLEVEL% NEQ 0 (
     echo   [错误] 依赖安装失败
     pause
