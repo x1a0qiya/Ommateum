@@ -11,7 +11,7 @@
 #
 # 环境变量覆盖（优先级低于命令行参数）:
 #   DATA_YAML, EPOCHS, BATCH, IMGSZ, DEVICE, FREEZE,
-#   LR0, LRF, PROJECT, NAME, PATIENCE, PRETRAINED
+#   LR0, LRF, PROJECT, NAME, PATIENCE, PRETRAINED, IOU
 # ============================================================
 
 set -euo pipefail
@@ -33,6 +33,7 @@ PRETRAINED="${PRETRAINED:-yolo11n.pt}"
 LR0="${LR0:-0.001}"
 LRF="${LRF:-0.1}"
 COS_LR="${COS_LR:-True}"
+IOU="${IOU:-0.7}"
 
 # ── 解析命令行参数 ──
 while [[ $# -gt 0 ]]; do
@@ -51,6 +52,7 @@ while [[ $# -gt 0 ]]; do
         --lr0)        LR0="$2";        shift 2 ;;
         --lrf)        LRF="$2";        shift 2 ;;
         --cos_lr)     COS_LR="$2";     shift 2 ;;
+        --iou)        IOU="$2";        shift 2 ;;
         *)
             echo "未知参数: $1"
             echo "用法: bash scripts/identify/train.sh --data <data.yaml> --name <exp_name> [可选参数...]"
@@ -72,6 +74,7 @@ echo " 设备:          $DEVICE"
 echo " 冻结层数:      $FREEZE"
 echo " 学习率:        $LR0 (final factor=$LRF)"
 echo " Cosine LR:    $COS_LR"
+echo " NMS IoU:      $IOU"
 echo " 实验名称:      $NAME"
 echo " 预训练目录:    weights/yolo/pretrained"
 echo " 产物目录:      $PROJECT/$NAME"
@@ -93,7 +96,8 @@ python src/ommateum/models/identify/train.py \
     --pretrained "$PRETRAINED" \
     --lr0 "$LR0" \
     --lrf "$LRF" \
-    --cos_lr "$COS_LR"
+    --cos_lr "$COS_LR" \
+    --iou "$IOU"
 
 # ── 输出最佳模型路径 ──
 TRAINED_BEST="weights/yolo/trained/${NAME}_best.pt"

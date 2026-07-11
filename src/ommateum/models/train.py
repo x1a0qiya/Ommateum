@@ -39,29 +39,50 @@ def parse_args():
                         help="使用 cosine 学习率衰减")
     parser.add_argument("--full_train", action="store_true",
                         help="全量训练模式：不冻结 backbone，使用默认学习率")
+    parser.add_argument("--iou", type=float, default=0.7,
+                        help="验证阶段 NMS IoU 阈值（0.1=严格, 0.9=宽松, 默认 0.7）")
     args = parser.parse_args()
-
-    return parser.parse_args()
+    return args
 
 def main():
     args = parse_args()
 
-    train_yolo_model(
-        data_yaml=args.data_yaml,
-        epochs=args.yolo_epochs,
-        imgsz=args.imgsz,
-        batch=args.yolo_batch_size,
-        device=args.device,
-        workers=args.workers,
-        project=args.yolo_cache_path,
-        name=args.name,
-        patience=args.patience,
-        freeze=args.freeze,
-        pretrained=args.pretrained,
-        lr0=args.yolo_lr,
-        lrf=args.lrf,
-        cos_lr=args.cos_lr,
-    )
+    if args.full_train:
+        train_yolo_model(
+            data_yaml=args.data_yaml,
+            epochs=args.yolo_epochs,
+            imgsz=args.imgsz,
+            batch=args.yolo_batch_size,
+            device=args.device,
+            workers=args.workers,
+            project=args.yolo_cache_path,
+            name=args.name,
+            patience=args.patience,
+            freeze=0,
+            pretrained=args.pretrained,
+            lr0=0.01,
+            lrf=0.01,
+            cos_lr=False,
+            iou=args.iou,
+        )
+    else:
+        train_yolo_model(
+            data_yaml=args.data_yaml,
+            epochs=args.yolo_epochs,
+            imgsz=args.imgsz,
+            batch=args.yolo_batch_size,
+            device=args.device,
+            workers=args.workers,
+            project=args.yolo_cache_path,
+            name=args.name,
+            patience=args.patience,
+            freeze=args.freeze,
+            pretrained=args.pretrained,
+            lr0=args.yolo_lr,
+            lrf=args.lrf,
+            cos_lr=args.cos_lr,
+            iou=args.iou,
+        )
 
     train_sam2(
         model_path=args.model_path,
