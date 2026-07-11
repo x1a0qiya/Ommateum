@@ -7,7 +7,6 @@ from PIL import Image
 from transformers import Sam2Processor, Sam2Model
 from peft import PeftModel
 
-# 尝试加载 tqdm 显示进度条，若未安装则提供一个替代的 dummy 进度条
 try:
     from tqdm import tqdm
 except ImportError:
@@ -188,6 +187,7 @@ def evaluate_sam2_miou(
                 ymax = max(0, min(img_h - 1, int((y_center + norm_h / 2.0) * img_h)))
             else:
                 xmin, ymin, xmax, ymax = map(int, coords)
+                class_id = 0
                 xmin = max(0, min(img_w - 1, xmin))
                 ymin = max(0, min(img_h - 1, ymin))
                 xmax = max(0, min(img_w - 1, xmax))
@@ -339,7 +339,6 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-    # 执行评估
     evaluate_sam2_miou(
         image_dir=args.image_dir,
         mask_dir=args.mask_dir,

@@ -11,8 +11,9 @@ python ./src/ommateum/models/train.py \
     --imgsz 640 \
     --model_path facebook/sam2-hiera-tiny \
     --save_path ./weights/sam2/trained/ \
-    --image_dir ./dataset/Detection/train/images \
-    --label_dir ./dataset/Detection/train/labels \
-    --mask_dir ./dataset/severstal_yolo/masks/train \
+    --image_dir ./dataset/Tumor-Detection/sub/images \
+    --label_dir ./dataset/Tumor-Detection/sub/labels_bbox \
+    --mask_dir ./dataset/Tumor-Detection/sub/masks \
     --sam2_batch_size 4 \
     --device cuda \
+    --sam2_epochs 15 \

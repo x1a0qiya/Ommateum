@@ -37,7 +37,7 @@ def main():
         slice_width=args.slice_width,
         overlap_height_ratio=args.overlap_height_ratio,
         overlap_width_ratio=args.overlap_width_ratio,
-        project=args.name,
+        project=args.project,
         name=args.name
     )
 

@@ -3,7 +3,7 @@
 cd /Ommateum
 
 python ./src/ommateum/models/test.py \
-    --model_path ./weights/yolo/pretrained/yolo11n.pt \
-    --source ./dataset/severstal_yolo/images/train \
+    --model_path ./weights/yolo/trained/train01_best.pt \
+    --source ./dataset/Tumor-Detection/test/images \
     --device cuda \
-    --project ./dataset/severstal \
+    --project ./dataset/Tumor-Detection/ts1/ \
