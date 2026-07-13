@@ -7,7 +7,7 @@ echo   Ommateum — 视觉缺陷检测平台启动脚本
 echo ============================================
 echo.
 
-:: 获取脚本所在目录
+:: 获取脚本所在目录（项目根目录）
 set SCRIPT_DIR=%~dp0
 cd /d "%SCRIPT_DIR%"
 
@@ -42,6 +42,11 @@ echo   ✓ 依赖安装完成
 echo.
 echo [3/3] 启动 API 服务器...
 echo.
+
+:: 切换到 API 目录（app.py 所在位置）
+set API_DIR=%SCRIPT_DIR%skills\ommateum-api
+cd /d "%API_DIR%"
+
 echo ============================================
 echo   启动成功！
 echo   前端地址: http://localhost:5000
@@ -51,5 +56,8 @@ echo ============================================
 echo.
 
 python app.py
+
+:: 如果服务器退出，回到根目录
+cd /d "%SCRIPT_DIR%"
 
 pause

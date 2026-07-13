@@ -26,12 +26,17 @@
   window.addEventListener('resize', resize);
 
   // ---- 六边形 (ommatidium) 绘制 ----
+  // 预计算六边形顶点角度 (避免每帧重复计算 sin/cos)
+  var HEX_VERT = [];
+  for (var vi = 0; vi < 6; vi++) {
+    var va = (Math.PI / 3) * vi - Math.PI / 6;
+    HEX_VERT.push({ c: Math.cos(va), s: Math.sin(va) });
+  }
   function drawHex(ctx, x, y, r, fill, stroke, lw) {
     ctx.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const a = (Math.PI / 3) * i - Math.PI / 6;
-      const px = x + r * Math.cos(a);
-      const py = y + r * Math.sin(a);
+    for (var i = 0; i < 6; i++) {
+      var px = x + r * HEX_VERT[i].c;
+      var py = y + r * HEX_VERT[i].s;
       i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
     }
     ctx.closePath();
@@ -39,15 +44,16 @@
     if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw || 1; ctx.stroke(); }
   }
 
-  const hexR = 18;
-  const hexW = Math.sqrt(3) * hexR;
-  const hexH = 2 * hexR;
-  const hGap = hexW;
-  const vGap = hexH * 0.78;
+  // 略增大六边形尺寸 → 减少总绘制数量
+  var hexR = 22;
+  var hexW = Math.sqrt(3) * hexR;
+  var hexH = 2 * hexR;
+  var hGap = hexW;
+  var vGap = hexH * 0.78;
 
   let startTs = null;
-  const TOTAL = 3800; // 总动画时长 (ms)
-  const BRAND_SHOW = 2200; // 品牌文字出现时间点
+  const TOTAL = 7000; // 总动画时长 (ms)
+  const BRAND_SHOW = 4200; // 品牌文字出现时间点
 
   function frame(ts) {
     if (!startTs) startTs = ts;
@@ -84,14 +90,14 @@
         const r = hexR * (1.3 - 0.55 * dNorm) * breath;
         if (r < 2.5) continue;
 
-        // 溶解效果：入/出
+        // 溶解效果：入/出 — 复眼在文字出现前完全消失 (t≈0.38 处 dissolve=0)
         const dissolveIn  = Math.min(t * 2.5, 1);
-        const dissolveOut = t > 0.7 ? Math.max(1 - (t - 0.7) / 0.3, 0) : 1;
+        const dissolveOut = t > 0.20 ? Math.max(1 - (t - 0.20) / 0.18, 0) : 1;
         const dissolve = dissolveIn * dissolveOut;
 
         const hue = 195 + dNorm * 40;
         const sat = 55 + dNorm * 20;
-        const light = 22 + dNorm * 50;
+        const light = 45 + dNorm * 30;  // 白色背景下改用亮色
 
         // 主体填充
         const fillAlpha = (0.85 + 0.1 * (1 - dNorm)) * dissolve;
@@ -103,35 +109,40 @@
         drawHex(ctx, x, y, r, null, `hsla(${hue + 20}, ${sat}%, ${light + 20}%, 0.5)`, 0.7);
 
         // 透镜高光 (内层小六边形)
-        const hlR = r * 0.42;
-        const hl = ctx.createRadialGradient(x - r * 0.1, y - r * 0.15, 0, x, y, hlR);
-        hl.addColorStop(0, `hsla(${hue}, 70%, 90%, ${(0.55 + 0.3 * (1 - dNorm)) * dissolve})`);
-        hl.addColorStop(0.5, `hsla(${hue}, 60%, 70%, ${0.25 * dissolve})`);
-        hl.addColorStop(1, 'transparent');
-        ctx.globalAlpha = 1;
-        drawHex(ctx, x, y, hlR, hl, null, 0);
+        var hlR = r * 0.42;
+        ctx.globalAlpha = (0.5 + 0.2 * (1 - dNorm)) * dissolve;
+        drawHex(ctx, x, y, hlR, 'rgba(255,255,255,0.55)', null, 0);
+        // 高光中心亮点
+        var dotR = hlR * 0.3;
+        if (dotR > 2) {
+          ctx.globalAlpha = 0.6 * dissolve;
+          ctx.beginPath();
+          ctx.arc(x - r * 0.08, y - r * 0.12, dotR, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(255,255,255,0.7)';
+          ctx.fill();
+        }
 
-        // 每个小眼的次级暗环
+        // 每个小眼的浅色装饰环
         if (r > 8) {
           const ringR = r * 0.7;
-          ctx.globalAlpha = 0.08 * dissolve;
-          drawHex(ctx, x, y, ringR, null, `hsla(${hue}, 30%, 40%, 0.5)`, 0.5);
+          ctx.globalAlpha = 0.15 * dissolve;
+          drawHex(ctx, x, y, ringR, null, `hsla(${hue + 10}, 40%, 70%, 0.4)`, 0.5);
         }
       }
     }
 
-    // 整体暗角
+    // 整体光晕 (白色背景下用柔和蓝紫色渐变)
     const vignette = ctx.createRadialGradient(cx, cy, w * 0.25, cx, cy, w * 0.85);
     vignette.addColorStop(0, 'transparent');
-    vignette.addColorStop(0.5, 'rgba(6, 13, 24, 0.2)');
-    vignette.addColorStop(1, 'rgba(6, 13, 24, 0.75)');
+    vignette.addColorStop(0.5, 'rgba(14, 165, 233, 0.08)');
+    vignette.addColorStop(1, 'rgba(14, 165, 233, 0.18)');
     ctx.globalAlpha = 1;
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, w, h);
 
-    // 中心"瞳孔"区域
+    // 中心"瞳孔"区域 (柔和的蓝色聚焦效果)
     const pupilGrad = ctx.createRadialGradient(lookX, lookY, hexR * 1.5, lookX, lookY, hexR * 6);
-    pupilGrad.addColorStop(0, 'rgba(6, 13, 24, 0.35)');
+    pupilGrad.addColorStop(0, 'rgba(14, 165, 233, 0.15)');
     pupilGrad.addColorStop(1, 'transparent');
     ctx.fillStyle = pupilGrad;
     ctx.fillRect(0, 0, w, h);
@@ -146,13 +157,188 @@
     if (t < 1) {
       animId = requestAnimationFrame(frame);
     } else {
-      // 动画完成 → 渐隐 splash
+      // 动画完成 → 渐隐 splash（先恢复滚动位置，再 fade-out，避免内容暴露时跳动）
+      window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
+      document.body.classList.remove('scrolled');
       splash.classList.add('fade-out');
-      setTimeout(function () { splash.style.display = 'none'; }, 950);
+      setTimeout(function () {
+        splash.style.display = 'none';
+      }, 950);
     }
   }
 
   animId = requestAnimationFrame(frame);
+})();
+
+
+/* ============================================================
+   动态粒子背景 — 类似 im.qq.com 风格
+   ============================================================ */
+(function initBgParticles() {
+  const canvas = document.getElementById('bgCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let W, H, particles = [];
+  let mouse = { x: -9999, y: -9999 };
+  let isRunning = false;
+
+  // ---- 配置 ----
+  const COUNT = 80;          // 粒子数量
+  const MAX_DIST = 150;      // 连线最大距离 (px)
+  const SPEED = 0.35;        // 粒子移动速度
+  const MOUSE_RADIUS = 200;  // 鼠标影响半径
+
+  // ---- DPR 适配 ----
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // ---- 粒子类 ----
+  class Particle {
+    constructor() {
+      this.reset(true);
+    }
+    reset(init) {
+      this.x = init ? Math.random() * W : (Math.random() < 0.5 ? 0 : W);
+      this.y = init ? Math.random() * H : Math.random() * H;
+      this.vx = (Math.random() - 0.5) * SPEED * 2;
+      this.vy = (Math.random() - 0.5) * SPEED * 2;
+      this.r = Math.random() * 2.2 + 1.0;
+      // 蓝紫色系 — 匹配主题 accent
+      this.hue = 195 + Math.random() * 30;     // 195~225 蓝青色
+      this.sat = 60 + Math.random() * 30;       // 60~90
+      this.light = 55 + Math.random() * 25;     // 55~80
+      this.alpha = 0.35 + Math.random() * 0.35; // 0.35~0.70
+    }
+    update() {
+      this.x += this.vx;
+      this.y += this.vy;
+      // 边界回弹
+      if (this.x < -20 || this.x > W + 20) this.vx *= -1;
+      if (this.y < -20 || this.y > H + 20) this.vy *= -1;
+      // 边界修正
+      this.x = Math.max(-20, Math.min(W + 20, this.x));
+      this.y = Math.max(-20, Math.min(H + 20, this.y));
+    }
+    draw() {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(${this.hue}, ${this.sat}%, ${this.light}%, ${this.alpha})`;
+      ctx.fill();
+    }
+  }
+
+  // ---- 初始化 ----
+  function init() {
+    particles = [];
+    for (let i = 0; i < COUNT; i++) {
+      particles.push(new Particle());
+    }
+  }
+  init();
+
+  // ---- 绘制连线 ----
+  function drawLines() {
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < MAX_DIST) {
+          const opacity = (1 - dist / MAX_DIST) * 0.30;
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.strokeStyle = `hsla(205, 70%, 70%, ${opacity})`;
+          ctx.lineWidth = 0.6;
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  // ---- 鼠标交互 ----
+  function handleMouse(e) {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+  }
+  function handleLeave() {
+    mouse.x = -9999;
+    mouse.y = -9999;
+  }
+  // 鼠标对粒子的影响：靠近时轻微推开
+  function applyMouseInfluence() {
+    for (const p of particles) {
+      const dx = p.x - mouse.x;
+      const dy = p.y - mouse.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < MOUSE_RADIUS && dist > 0) {
+        const force = (1 - dist / MOUSE_RADIUS) * 0.3;
+        p.vx += (dx / dist) * force;
+        p.vy += (dy / dist) * force;
+      }
+    }
+  }
+
+  document.addEventListener('mousemove', handleMouse);
+  document.addEventListener('mouseleave', handleLeave);
+
+  // ---- 动画循环 ----
+  function animate() {
+    // 半透明覆盖实现残影/拖尾效果
+    ctx.fillStyle = 'rgba(238, 243, 248, 0.25)'; // 使用 --bg-0 色
+    ctx.fillRect(0, 0, W, H);
+
+    // 更新 & 绘制
+    if (isRunning) {
+      applyMouseInfluence();
+    }
+    for (const p of particles) {
+      p.update();
+      p.draw();
+    }
+    drawLines();
+
+    requestAnimationFrame(animate);
+  }
+
+  // ---- 启动 ----
+  // 启动背景动画
+  isRunning = true;
+  // 先清除画布为透明
+  ctx.clearRect(0, 0, W, H);
+  // 让 canvas 淡入
+  setTimeout(() => { canvas.classList.add('visible'); }, 100);
+  animate();
+
+  // splash 消失后，停止鼠标残留影响
+  const splash = document.getElementById('splashScreen');
+  if (splash) {
+    const obs = new MutationObserver(function () {
+      if (splash.style.display === 'none' || getComputedStyle(splash).opacity === '0') {
+        // splash 已消失 → 恢复粒子移动
+      }
+    });
+    obs.observe(splash, { attributes: true, attributeFilter: ['style'] });
+  }
+
+  // ---- 窗口变化重设粒子 ----
+  window.addEventListener('resize', function () {
+    resize();
+    for (const p of particles) {
+      p.x = Math.max(0, Math.min(W, p.x));
+      p.y = Math.max(0, Math.min(H, p.y));
+    }
+  });
 })();
 
 
@@ -506,7 +692,7 @@ function renderResults() {
     const img = state.images.find(i => i.id === r.image_id);
     row.innerHTML = `
       <div class="result-thumb">${img && img.url ? `<img src="${img.url}" alt="">` : ''}</div>
-      <div class="result-info"><div class="ri-name">${r.image_name || (img ? img.name : r.image_id)}</div><div class="ri-detail">${r.defect_type ? '类型: ' + r.defect_type + ' · ' : ''}置信度 ${confPct}%${r.processing_ms ? ' · ' + r.processing_ms + 'ms' : ''}</div></div>
+      <div class="result-info"><div class="ri-name">${r.image_name || (img ? img.name : r.image_id)}${r.rag_similar ? `<span class="rag-badge" title="ChromaDB 中检索到 ${r.rag_similar.length} 条相似历史记录">RAG ${r.rag_similar.length}</span>` : ''}</div><div class="ri-detail">${r.defect_type ? '类型: ' + r.defect_type + ' · ' : ''}置信度 ${confPct}%${r.processing_ms ? ' · ' + r.processing_ms + 'ms' : ''}</div></div>
       <div class="result-verdict"><div class="conf-bar"><div class="fill ${sevClass}" style="width:${confPct}%"></div></div><span class="verdict-tag ${sevClass}">${vTag}</span></div>`;
     body.appendChild(row);
   });
@@ -880,7 +1066,7 @@ function renderInfResults() {
     const img = state.infImages.find(i => i.id === r.image_id);
     row.innerHTML = `
       <div class="result-thumb">${img && img.url ? `<img src="${img.url}" alt="">` : ''}</div>
-      <div class="result-info"><div class="ri-name">${r.image_name || (img ? img.name : '')}</div><div class="ri-detail">${r.defect_type ? '类型: '+r.defect_type+' · ' : ''}置信度 ${(conf*100).toFixed(1)}%</div></div>
+      <div class="result-info"><div class="ri-name">${r.image_name || (img ? img.name : '')}${r.rag_similar ? `<span class="rag-badge" title="ChromaDB 中检索到 ${r.rag_similar.length} 条相似历史记录">RAG ${r.rag_similar.length}</span>` : ''}</div><div class="ri-detail">${r.defect_type ? '类型: '+r.defect_type+' · ' : ''}置信度 ${(conf*100).toFixed(1)}%</div></div>
       <div class="result-verdict"><div class="conf-bar"><div class="fill ${sevClass}" style="width:${(conf*100).toFixed(1)}%"></div></div><span class="verdict-tag ${sevClass}">${vTag}</span></div>`;
     body.appendChild(row);
   });
@@ -1029,6 +1215,10 @@ function startTypewriter() {
       }
       i++;
       setTimeout(type, 80 + Math.random() * 60);
+    } else {
+      // 打字机完成 → 滑入五个统计数据
+      const meta = document.querySelector('.hero-meta');
+      if (meta) meta.classList.add('reveal');
     }
   }
 
@@ -1062,6 +1252,31 @@ async function init() {
   checkReady();
   updateTrainSummary();
   setInterval(checkApiStatus, 30000);
+  setupClickBlur();
+}
+
+/* ---- 点击周围模糊特效 ---- */
+function setupClickBlur() {
+  const bg = document.getElementById('bgCanvas');
+  if (!bg) return;
+  let timer = null;
+  document.addEventListener('click', (e) => {
+    // 忽略纯文本无交互元素的点击
+    const tag = e.target.tagName;
+    if (tag === 'BODY' || tag === 'HTML' || tag === 'DIV' && !e.target.closest('.panel, button, .model-card, .weight-item, .upload-zone, .gtab, .img-card, .scroll-cue, .github-link')) return;
+    // 清除之前的定时器 / class
+    if (timer) clearTimeout(timer);
+    bg.classList.remove('click-blur-return');
+    // 应用模糊
+    bg.classList.add('click-blur');
+    // 600ms 后开始回归
+    timer = setTimeout(() => {
+      bg.classList.remove('click-blur');
+      bg.classList.add('click-blur-return');
+      // 回归动画结束后清理
+      setTimeout(() => { bg.classList.remove('click-blur-return'); }, 550);
+    }, 600);
+  });
 }
 
 async function refreshImages() {

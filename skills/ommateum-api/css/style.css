@@ -75,10 +75,26 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* ---- 动态粒子背景 (Canvas) ---- */
+#bgCanvas {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  pointer-events: none;
+  display: block;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+#bgCanvas.visible {
+  opacity: 1;
+}
+
 /* ---- Splash Screen (复眼入场动画) ---- */
 #splashScreen {
   position: fixed; inset: 0; z-index: 9999;
-  background: #060d18;
+  background: #ffffff;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   transition: opacity 900ms cubic-bezier(0.4, 0, 0.2, 1), visibility 900ms;
@@ -106,15 +122,15 @@
   font-family: 'STSong', '华文宋体', 'Songti SC', 'SimSun', serif;
   font-size: clamp(36px, 6vw, 56px);
   font-weight: 700;
-  color: #fff;
+  color: var(--text-0);
   letter-spacing: 0.08em;
   display: block;
-  text-shadow: 0 0 60px rgba(56, 189, 248, 0.5);
+  text-shadow: 0 0 60px rgba(14, 165, 233, 0.25);
 }
 #splashTag {
   font-family: ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-2);
   letter-spacing: 0.14em;
   margin-top: 12px;
   display: block;
@@ -314,8 +330,15 @@ body.scrolled .topbar { transform: translateY(-100%); opacity: 0; pointer-events
 .hero-inner { display: flex; align-items: center; justify-content: center; gap: 96px; }
 .hero h1 { font-size: clamp(30px, 4vw, 42px); font-weight: 700; letter-spacing: -0.03em; line-height: 1.15; margin: 0; color: var(--text-0); }
 .hero h1 .hl { color: var(--accent); }
-.hero-meta { display: flex; flex-direction: column; gap: 14px; margin: 0; }
-.hero-meta .stat { display: flex; align-items: baseline; gap: 10px; }
+.hero-meta { display: flex; flex-direction: column; gap: 14px; margin: 0; opacity: 0; transform: translateX(30px); }
+.hero-meta.reveal { opacity: 1; transform: none; transition: opacity 600ms ease, transform 600ms ease; }
+.hero-meta .stat { display: flex; align-items: baseline; gap: 10px; opacity: 0; transform: translateX(20px); }
+.hero-meta.reveal .stat { opacity: 1; transform: none; transition: opacity 500ms ease, transform 500ms ease; }
+.hero-meta.reveal .stat:nth-child(1) { transition-delay: 0ms; }
+.hero-meta.reveal .stat:nth-child(2) { transition-delay: 80ms; }
+.hero-meta.reveal .stat:nth-child(3) { transition-delay: 160ms; }
+.hero-meta.reveal .stat:nth-child(4) { transition-delay: 240ms; }
+.hero-meta.reveal .stat:nth-child(5) { transition-delay: 320ms; }
 .hero-meta .stat .v { font-family: ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; font-size: 24px; font-weight: 600; color: var(--text-0); min-width: 58px; }
 .hero-meta .stat .l { font-size: 13px; color: var(--text-2); }
 
@@ -376,11 +399,56 @@ body.scrolled .topbar { transform: translateY(-100%); opacity: 0; pointer-events
 .panel-head .idx { font-family: ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; font-size: 11px; color: var(--accent-dark); background: var(--accent-soft); padding: 2px 8px; border-radius: 5px; font-weight: 600; }
 .panel-body { padding: 20px; }
 
-/* ---- Third screen: 锁定整屏高度，内容在面板内滚动，页面不溢出 ---- */
-#heroInference .app { flex: 1; min-height: 0; padding-bottom: 16px; }
+/* ---- Third screen: 与第二屏等大，内容居中 ---- */
+#heroInference {
+  height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+#heroInference .app {
+  flex: 1;
+  min-height: 0;
+  padding: 20px 28px;  /* 与 .workspace 一致 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+#heroInference .inf-header {
+  text-align: center;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+#heroInference .inf-header h1 {
+  font-size: clamp(26px, 3.5vw, 38px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text-0);
+}
+#heroInference .inf-header p {
+  color: var(--text-2);
+  font-size: 14px;
+  margin-top: 8px;
+}
+#heroInference .inf-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 330px 1fr;
+  gap: 14px;
+  align-items: stretch;
+}
+#heroInference .inf-grid main {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 14px;
+  min-height: 0;
+}
 #heroInference .panel { display: flex; flex-direction: column; min-height: 0; }
 #heroInference .panel-body { flex: 1; min-height: 0; overflow: auto; }
-#heroInference .footer { margin-top: 0; justify-content: center; gap: 16px; text-align: center; }
+#heroInference .footer { margin-top: 0; justify-content: center; gap: 16px; text-align: center; padding: 12px 28px; }
 
 /* ---- Sidebar config ---- */
 .config-section { margin-bottom: 28px; }
@@ -570,6 +638,7 @@ select.field:disabled { opacity: 0.5; cursor: not-allowed; }
 .result-info { flex: 1; min-width: 0; }
 .result-info .ri-name { font-size: 14px; font-weight: 500; margin-bottom: 3px; color: var(--text-0); }
 .result-info .ri-detail { font-size: 12px; color: var(--text-2); font-family: ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; }
+.rag-badge { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; font-family: ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; background: rgba(139, 92, 246, 0.15); color: #7c3aed; cursor: help; vertical-align: middle; }
 .result-verdict { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
 .conf-bar { width: 100px; height: 6px; border-radius: 999px; background: var(--bg-3); overflow: hidden; }
 .conf-bar .fill { height: 100%; border-radius: 999px; transition: width 600ms var(--ease); }
@@ -727,4 +796,44 @@ select.field:disabled { opacity: 0.5; cursor: not-allowed; }
   .workspace { grid-template-columns: 1fr; height: auto; }
   .workspace main { grid-template-columns: 1fr; grid-template-rows: none; }
   .workspace .panel { min-height: 320px; }
+}
+
+/* ============================================================
+   第二屏 & 第三屏 — 面板不透明度提升（遮挡背景粒子）
+   ============================================================ */
+.workspace .panel,
+#heroInference .panel {
+  background: rgba(255, 255, 255, 0.92);
+}
+.workspace .panel .model-card,
+#heroInference .panel .model-card,
+.workspace .panel .weight-item,
+#heroInference .panel .weight-item,
+.workspace .panel .upload-zone,
+#heroInference .panel .upload-zone,
+.workspace .panel .gallery-empty,
+#heroInference .panel .gallery-empty,
+.workspace .panel .img-card,
+#heroInference .panel .img-card,
+.workspace .panel .train-data-summary,
+#heroInference .panel .train-data-summary,
+.workspace .panel .tp-metric,
+#heroInference .panel .tp-metric,
+.workspace .panel .trained-empty,
+#heroInference .panel .trained-empty,
+.workspace .panel .trained-item,
+#heroInference .panel .trained-item {
+  background: rgba(255, 255, 255, 0.90);
+}
+
+/* ============================================================
+   点击周围模糊特效
+   ============================================================ */
+#bgCanvas.click-blur {
+  filter: blur(8px);
+  transition: filter 0.25s ease;
+}
+#bgCanvas.click-blur-return {
+  filter: blur(0);
+  transition: filter 0.5s ease;
 }

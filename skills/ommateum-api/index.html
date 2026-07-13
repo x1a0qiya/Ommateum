@@ -8,6 +8,9 @@
 </head>
 <body>
 
+<!-- ===== 动态粒子背景 (Canvas) ===== -->
+<canvas id="bgCanvas"></canvas>
+
 <!-- ============================================================
    SPLASH SCREEN — 复眼 (Compound Eye) 入场动画
    Canvas 绘制六边形复眼图案，渐变过渡到主界面
@@ -199,16 +202,14 @@
 </div>
 
 <!-- ========== THIRD SCREEN: Inference on unclassified images ========== -->
-<section class="hero t-screen" id="heroInference" style="height:100vh;box-sizing:border-box;display:flex;flex-direction:column;padding:24px 0;">
+<section class="hero t-screen" id="heroInference">
   <div class="app">
-    <div style="text-align:center;margin-bottom:32px;">
-      <h1 style="font-size:clamp(26px,3.5vw,38px);font-weight:700;letter-spacing:-0.03em;color:var(--text-0);">
-        在线缺陷检测 <span class="hl" style="color:var(--accent);">推理</span>
-      </h1>
-      <p style="color:var(--text-2);font-size:14px;margin-top:8px;">基于训练产出的模型权重，对待检测图片进行实时缺陷识别</p>
+    <div class="inf-header">
+      <h1>在线缺陷检测 <span class="hl">推理</span></h1>
+      <p>基于训练产出的模型权重，对待检测图片进行实时缺陷识别</p>
     </div>
 
-    <div style="display:grid;grid-template-columns:330px 1fr;gap:14px;align-items:stretch;flex:1;min-height:0;">
+    <div class="inf-grid">
 
       <!-- Left: config -->
       <aside>
@@ -234,7 +235,7 @@
       </aside>
 
       <!-- Right: upload + results -->
-      <main style="display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr;gap:14px;min-height:0;">
+      <main>
 
         <!-- Upload -->
         <div class="panel reveal">
