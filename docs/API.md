@@ -224,10 +224,10 @@ curl "http://localhost:5000/api/weights?model=yolov11"
 {
   "status": "ok",
   "data": {
-    "model": "yolov11",
-    "weights": [
+    "model_id": "yolov11",
+    "models": [
       {
-        "id": "yolov11n-default",
+        "id": "yolov11n",
         "name": "yolo11n 默认权重",
         "size_mb": 5.4,
         "accuracy": 0.952,
@@ -341,8 +341,6 @@ Content-Type: multipart/form-data
 |------|------|------|------|
 | `file` | File | 是 | 图片文件（支持 jpg / png / webp） |
 | `type` | string | 是 | `normal`（正常样本）或 `defect`（缺陷样本） |
-| `model` | string | 否 | 关联模型 ID（可选） |
-| `weight` | string | 否 | 关联权重 ID（可选） |
 
 **请求示例**：
 
@@ -357,7 +355,6 @@ curl -X POST http://localhost:5000/api/images \
 ```json
 {
   "status": "ok",
-  "message": "上传成功",
   "data": {
     "image": {
       "id": "img_x1y2z3w4",
