@@ -19,7 +19,6 @@ albumentations>=1.4.0   # 包含高效的 Copy-Paste 数据增强实现
 supervision>=0.19.0     # 用于掩码、多边形转换与后处理的视觉库
 scikit-image>=0.21.0    # 辅助滑动窗口与形态学处理
 
-fastapi>=0.110.0        # 后端通信
 uvicorn[standard]>=0.29.0
 gradio>=4.20.0          # 交互式标注与演示前端
 pydantic>=2.0.0         # 数据校验
@@ -32,6 +31,6 @@ matplotlib>=3.7.0
 sahi
 chromadb
 sentence-transformers 
-Flask==3.0.3
+Flask==3.0.3            # 后端通信
 flask-cors==4.0.1
 Pillow==10.4.0
