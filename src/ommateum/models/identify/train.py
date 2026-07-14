@@ -13,7 +13,7 @@ import argparse
 import os
 import shutil
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 
 from ultralytics import YOLO
 from ultralytics.engine.results import Results
@@ -77,6 +77,7 @@ def train_yolo_model(
     lrf : float = 0.1,
     cos_lr : bool = True,
     iou : float = 0.7,
+    weights_output_path : Optional[str] = None,
 ) -> Results:
     """
     训练 YOLOv11 模型，默认使用小样本微调参数（冻结 backbone+neck + 低学习率）。
@@ -100,6 +101,10 @@ def train_yolo_model(
             上限 1.0 = 最宽松（保留更多重叠框，提高召回但可能降低精度）；
             下限 0.1 = 最严格（抑制大量重叠框，提高精度但可能降低召回）。
             默认 0.7 为 YOLO 标准值，Severstal 数据缺陷稀疏可设高一些（0.8~0.9）。
+        weights_output_path (str | None): 训练完成后 best.pt 的额外输出目录。
+            若指定，best.pt 将同时复制到该目录下，文件名为 {name}_best.pt；
+            不指定则仅保存到默认位置 weights/yolo/trained/{name}_best.pt。
+            用于后端整合时指定权重保存目录。
 
     Returns:
         Results: Ultralytics 训练结果对象，包含最佳模型路径等信息。
@@ -162,6 +167,14 @@ def train_yolo_model(
         trained_path = TRAINED_DIR / trained_name
         shutil.copy2(best_path, str(trained_path))
         print(f"已复制最佳模型到: {trained_path}")
+
+        # ── 若指定了额外输出目录，同时复制一份到该目录（文件名固定为 {name}_best.pt）──
+        if weights_output_path:
+            output_dir = Path(weights_output_path)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            output_file = output_dir / trained_name
+            shutil.copy2(best_path, str(output_file))
+            print(f"已复制最佳模型到指定目录: {output_file}")
     else:
         print("训练完成！请检查 runs 目录下的权重文件。")
     return model
@@ -189,6 +202,8 @@ if __name__ == "__main__":
                         help="使用 cosine 学习率衰减")
     parser.add_argument("--iou", type=float, default=0.7,
                         help="验证阶段 NMS IoU 阈值（0.1=严格, 0.9=宽松, 默认 0.7）")
+    parser.add_argument("--weights_output_path", default=None,
+                        help="训练完成后 best.pt 的额外输出目录（文件名固定为 {name}_best.pt，用于后端整合）")
     parser.add_argument("--full_train", action="store_true",
                         help="全量训练模式：不冻结 backbone，使用默认学习率")
     args = parser.parse_args()
@@ -211,6 +226,7 @@ if __name__ == "__main__":
             lrf=0.01,
             cos_lr=False,
             iou=args.iou,
+            weights_output_path=args.weights_output_path,
         )
     else:
         train_yolo_model(
@@ -229,4 +245,5 @@ if __name__ == "__main__":
             lrf=args.lrf,
             cos_lr=args.cos_lr,
             iou=args.iou,
+            weights_output_path=args.weights_output_path,
         )
