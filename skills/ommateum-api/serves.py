@@ -99,6 +99,13 @@ def get_images(name: str | None) -> dict:
     
 def upload_zip(images_zip, annotation_json, masks_zip) -> dict:
     try:
+        if images_zip is None or not images_zip.filename:
+            return {
+                'status': 'error',
+                'timestamp': get_datetime(),
+                'error': 'images_zip is required and must not be empty.'
+            }
+
         js = {
             'status': 'ok',
             'timestamp': get_datetime(),
@@ -125,9 +132,11 @@ def upload_zip(images_zip, annotation_json, masks_zip) -> dict:
             'image_count': img_info['saved_files_count']
         }
 
-        if annotation_json is not None:
+        if annotation_json is not None and annotation_json.filename:
+            # annotation_json 是 FileStorage, 需先读取再解析 JSON
+            json_content = json.loads(annotation_json.read())
             ann_info = api_utils.save_json_file(
-                json_data=annotation_json,
+                json_data=json_content,
                 base_save_dir=dir,
                 name='',
             )
@@ -137,7 +146,7 @@ def upload_zip(images_zip, annotation_json, masks_zip) -> dict:
                 'size_kb': ann_info['size_kb'] 
             }
 
-        if masks_zip is not None:
+        if masks_zip is not None and masks_zip.filename:
             msk_name = masks_zip.filename
             msk_info = api_utils.handle_zip_upload(
                 file_stream=masks_zip,

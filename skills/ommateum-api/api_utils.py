@@ -12,7 +12,7 @@ def get_root_dir() -> str:
     返回根目录.
     """
     curr_path = Path(__file__).resolve()
-    root = curr_path.parent.parent
+    root = curr_path.parent.parent.parent
     return str(root)
 
 def get_datetime() -> str:
@@ -231,8 +231,8 @@ def save_json_file(
     Returns:
         dict: 包含 batch_id、保存路径和上传时间等信息。
     """
-    if not isinstance(json_data, dict):
-        raise ValueError("json_data must be a dictionary.")
+    # if not isinstance(json_data, dict):
+    #     raise ValueError("json_data must be a dictionary.")
 
     target_dir = os.path.join(base_save_dir, name)
     os.makedirs(target_dir, exist_ok=True)

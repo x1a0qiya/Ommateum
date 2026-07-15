@@ -1,0 +1,740 @@
+openapi: "3.0.3"
+info:
+  title: Ommateum API
+  description: |
+    Ommateum 图像分割服务 API —— 提供数据集管理、模型训练、图像预测与结果导出能力。
+
+    核心流程：
+    1. 上传数据集（图片 ZIP + COCO 标注 JSON + 可选掩码 ZIP）
+    2. 发起训练任务，异步返回 task_id
+    3. 通过 SSE 轮询任务状态
+    4. 发起预测任务，同样异步执行
+    5. 导出训练权重或预测结果 ZIP
+
+    基础地址：`http://<host>:5000`
+  version: "1.0.0"
+  contact:
+    name: Ommateum Team
+
+servers:
+  - url: http://localhost:5000
+    description: 本地开发服务器
+
+tags:
+  - name: System
+    description: 系统信息与健康检查
+  - name: Models
+    description: 模型与权重管理
+  - name: Dataset
+    description: 数据集上传与管理
+  - name: Task
+    description: 异步任务（训练 / 预测）与结果导出
+
+# ──────────────────────────── 公共 Schema ────────────────────────────
+components:
+  schemas:
+
+    # ── 通用响应 ──
+    ErrorResponse:
+      type: object
+      required: [status, timestamp, error]
+      properties:
+        status:
+          type: string
+          enum: [error]
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 UTC 时间戳
+          example: "2026-07-15T08:30:00+00:00"
+        error:
+          type: string
+          description: 错误描述
+
+    # ── 健康检查 ──
+    HealthData:
+      type: object
+      properties:
+        service:
+          type: string
+          example: "Ommateum API"
+        version:
+          type: string
+          example: "1.0.0"
+        models:
+          type: integer
+          example: 1
+        images:
+          type: integer
+          description: 当前数据集中图片批次数
+        trained_weights:
+          type: integer
+          description: 已训练模型权重数
+        rag_available:
+          type: boolean
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        timestamp:
+          type: string
+          format: date-time
+        data:
+          $ref: "#/components/schemas/HealthData"
+
+    # ── 模型配置 ──
+    ModelConfig:
+      type: object
+      description: 单个模型权重配置（字段由 weights 目录下的 config.json 定义）
+      properties:
+        id:
+          type: string
+          example: "a1b2c3d4"
+
+    ModelListData:
+      type: object
+      properties:
+        models:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelConfig"
+        total:
+          type: integer
+
+    ModelListResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        timestamp:
+          type: string
+          format: date-time
+        data:
+          $ref: "#/components/schemas/ModelListData"
+
+    # ── 图片 ──
+    ImageItem:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 图片 SHA-256 哈希 ID
+        name:
+          type: string
+          description: 文件名
+        batch_name:
+          type: string
+        size_kb:
+          type: number
+          format: float
+        url:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        uploaded_at:
+          type: string
+          format: date-time
+
+    ImageListData:
+      type: object
+      properties:
+        images:
+          type: array
+          items:
+            $ref: "#/components/schemas/ImageItem"
+        total:
+          type: integer
+
+    ImageListResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        timestamp:
+          type: string
+          format: date-time
+        data:
+          $ref: "#/components/schemas/ImageListData"
+
+    # ── 数据集上传 ──
+    FileInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 文件名
+        size_kb:
+          type: number
+          format: float
+        image_count:
+          type: integer
+          description: 仅 images_file 有此字段
+        mask_count:
+          type: integer
+          description: 仅 masks_file 有此字段
+
+    UploadData:
+      type: object
+      properties:
+        batch_id:
+          type: string
+          description: 数据集唯一批次 ID（UUID 去连字符）
+          example: "a1b2c3d4e5f6789012345678abcdef01"
+        uploaded_at:
+          type: string
+          format: date-time
+        images_file:
+          $ref: "#/components/schemas/FileInfo"
+        annotation_file:
+          $ref: "#/components/schemas/FileInfo"
+        masks_file:
+          $ref: "#/components/schemas/FileInfo"
+
+    UploadResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        timestamp:
+          type: string
+          format: date-time
+        data:
+          $ref: "#/components/schemas/UploadData"
+
+    # ── 异步任务 ──
+    TaskCreatedData:
+      type: object
+      properties:
+        task_id:
+          type: string
+          description: 8 位短 UUID，用于后续查询状态和导出结果
+          example: "a1b2c3d4"
+
+    TaskCreatedResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        timestamp:
+          type: string
+          format: date-time
+        data:
+          $ref: "#/components/schemas/TaskCreatedData"
+
+    # ── 删除批次 ──
+    DeleteBatchData:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 已删除的批次名称
+
+    DeleteBatchResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        timestamp:
+          type: string
+          format: date-time
+        data:
+          $ref: "#/components/schemas/DeleteBatchData"
+
+    # ── 训练参数 ──
+    TrainParams:
+      type: object
+      description: 可选训练超参，不传则使用默认值
+      properties:
+        model_path:
+          type: string
+        sam2_epochs:
+          type: integer
+        sam2_batch_size:
+          type: integer
+        lora_rank:
+          type: integer
+        sam2_lr:
+          type: number
+          format: float
+        weight_decay:
+          type: number
+          format: float
+        yolo_epochs:
+          type: integer
+        imgsz:
+          type: integer
+        yolo_batch_size:
+          type: integer
+        patience:
+          type: integer
+        freeze:
+          type: integer
+        pretrained:
+          type: string
+        yolo_lr:
+          type: number
+          format: float
+
+    TrainRequest:
+      type: object
+      required: [batch_name]
+      properties:
+        batch_name:
+          type: string
+          description: 已上传的数据集批次名称
+        params:
+          $ref: "#/components/schemas/TrainParams"
+
+    # ── 预测参数 ──
+    PredictRequest:
+      type: object
+      required: [batch_name, weight]
+      properties:
+        batch_name:
+          type: string
+          description: 已上传的数据集批次名称
+        weight:
+          type: string
+          description: 训练好的模型权重名称
+        conf:
+          type: number
+          format: float
+          default: 0.25
+          description: YOLO 置信度阈值
+        iou:
+          type: number
+          format: float
+          default: 0.7
+          description: NMS IoU 阈值
+        imgsz:
+          type: integer
+          default: 640
+          description: 推理图像尺寸（不传则自动取图片最大尺寸）
+
+# ──────────────────────────── 路径 ────────────────────────────
+paths:
+
+  # ── System ──
+  /api:
+    get:
+      tags: [System]
+      summary: API 信息
+      description: 返回 API 基础信息（当前空实现）。
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/health:
+    get:
+      tags: [System]
+      summary: 健康检查
+      description: 返回服务运行状态、模型数、图片批次数、权重数等信息。
+      responses:
+        "200":
+          description: 服务正常
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/HealthResponse"
+                  - $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                ok:
+                  summary: 正常
+                  value:
+                    status: "ok"
+                    timestamp: "2026-07-15T08:30:00+00:00"
+                    data:
+                      service: "Ommateum API"
+                      version: "1.0.0"
+                      models: 1
+                      images: 3
+                      trained_weights: 2
+                      rag_available: true
+                error:
+                  summary: 异常
+                  value:
+                    status: "error"
+                    timestamp: "2026-07-15T08:30:00+00:00"
+                    error: "FileNotFoundError(...)"
+
+  # ── Models ──
+  /api/models:
+    get:
+      tags: [Models]
+      summary: 获取所有模型配置
+      description: 扫描 weights 目录下所有 `config.json` 并返回模型列表。
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ModelListResponse"
+                  - $ref: "#/components/schemas/ErrorResponse"
+
+  /api/weights:
+    get:
+      tags: [Models]
+      summary: 获取指定模型权重配置
+      description: 根据 model_id 返回单个模型权重详情。
+      parameters:
+        - name: model
+          in: query
+          required: false
+          description: 模型 ID，不传则返回全部
+          schema:
+            type: string
+          example: "a1b2c3d4"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ModelListResponse"
+                  - $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Dataset ──
+  /api/images:
+    get:
+      tags: [Dataset]
+      summary: 获取指定批次的图片列表
+      parameters:
+        - name: name
+          in: query
+          required: true
+          description: 批次名称
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ImageListResponse"
+                  - $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_name:
+                  summary: 缺少 name 参数
+                  value:
+                    status: "error"
+                    timestamp: "2026-07-15T08:30:00+00:00"
+                    error: "'Name' must be unempty."
+
+  /api/dataset:
+    post:
+      tags: [Dataset]
+      summary: 上传数据集
+      description: |
+        上传一个批次的数据集，包含图片 ZIP、COCO 标注 JSON 文件和可选的掩码 ZIP。
+        - **images_zip**：必填，图片压缩包
+        - **annotation_json**：可选，COCO 格式标注文件
+        - **masks_zip**：可选，掩码压缩包
+
+        返回 batch_id 用于后续训练 / 预测。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [images_zip]
+              properties:
+                images_zip:
+                  type: string
+                  format: binary
+                  description: 图片 ZIP 压缩包
+                annotation_json:
+                  type: string
+                  format: binary
+                  description: COCO 格式 JSON 标注文件（可选）
+                masks_zip:
+                  type: string
+                  format: binary
+                  description: 掩码图片 ZIP 压缩包（可选）
+      responses:
+        "200":
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/UploadResponse"
+                  - $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                ok:
+                  summary: 完整上传
+                  value:
+                    status: "ok"
+                    timestamp: "2026-07-15T08:30:00+00:00"
+                    data:
+                      batch_id: "a1b2c3d4e5f6789012345678abcdef01"
+                      uploaded_at: "2026-07-15T08:30:00Z"
+                      images_file:
+                        name: "images.zip"
+                        size_kb: 1024.5
+                        image_count: 50
+                      annotation_file:
+                        name: "coco_annotations.json"
+                        size_kb: 32.1
+                      masks_file:
+                        name: "masks.zip"
+                        size_kb: 512.3
+                        mask_count: 50
+
+  /api/images/{img_id}:
+    delete:
+      tags: [Dataset]
+      summary: 删除指定批次
+      description: 删除数据集中的整个批次文件夹（含图片、标注、掩码等）。
+      parameters:
+        - name: img_id
+          in: path
+          required: true
+          description: 批次名称 / ID
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/DeleteBatchResponse"
+                  - $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                ok:
+                  summary: 成功
+                  value:
+                    status: "ok"
+                    timestamp: "2026-07-15T08:30:00+00:00"
+                    data:
+                      id: "my_batch_001"
+
+  # ── Predict ──
+  /api/predict:
+    post:
+      tags: [Task]
+      summary: 发起图像分割预测
+      description: |
+        异步执行 YOLO + SAM2 图像分割。返回 task_id，通过 `/api/task/{task_id}` SSE 接口轮询完成状态。
+
+        必填字段：`batch_name`（数据集批次）、`weight`（模型权重名称）。
+        可选：`conf`、`iou`、`imgsz`。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PredictRequest"
+            examples:
+              minimal:
+                summary: 最小请求
+                value:
+                  batch_name: "my_batch_001"
+                  weight: "yolo11n"
+              full:
+                summary: 完整请求
+                value:
+                  batch_name: "my_batch_001"
+                  weight: "yolo11n"
+                  conf: 0.5
+                  iou: 0.6
+                  imgsz: 1024
+      responses:
+        "200":
+          description: 任务已创建
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/TaskCreatedResponse"
+                  - $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                ok:
+                  summary: 成功
+                  value:
+                    status: "ok"
+                    timestamp: "2026-07-15T08:30:00+00:00"
+                    data:
+                      task_id: "a1b2c3d4"
+                bad_json:
+                  summary: JSON 解析失败
+                  value:
+                    status: "error"
+                    timestamp: "2026-07-15T08:30:00+00:00"
+                    error: "Json Error."
+
+  # ── Train ──
+  /api/train:
+    post:
+      tags: [Task]
+      summary: 发起模型训练
+      description: |
+        异步训练 YOLO + SAM2 模型。先调用 COCO→YOLO 格式转换，再启动训练流程。
+        返回 task_id，通过 `/api/task/{task_id}` 轮询状态。
+
+        必填字段：`batch_name`。
+        可选字段：`params` 对象，包含训练超参。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrainRequest"
+            examples:
+              minimal:
+                summary: 最小请求
+                value:
+                  batch_name: "my_batch_001"
+              with_params:
+                summary: 指定训练参数
+                value:
+                  batch_name: "my_batch_001"
+                  params:
+                    yolo_epochs: 100
+                    imgsz: 640
+                    yolo_batch_size: 16
+                    sam2_epochs: 50
+                    lora_rank: 4
+      responses:
+        "200":
+          description: 任务已创建
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/TaskCreatedResponse"
+                  - $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                ok:
+                  summary: 成功
+                  value:
+                    status: "ok"
+                    timestamp: "2026-07-15T08:30:00+00:00"
+                    data:
+                      task_id: "e5f6g7h8"
+
+  # ── Task SSE ──
+  /api/task/{task_id}:
+    get:
+      tags: [Task]
+      summary: 查询异步任务状态（SSE）
+      description: |
+        Server-Sent Events 接口，用于实时获取任务执行状态。
+
+        **事件流格式：**
+        1. 连接后立即推送进度消息：`{"status":"ok","timestamp":"...","message":"Progressing..."}`
+        2. 任务完成后推送结果：
+           - 成功：`{"status":"completed","error":null}`
+           - 失败：`{"status":"failed","error":"<错误详情>"}`
+        3. 任务不存在：`{"status":"error","timestamp":"...","error":"No task id"}`
+        4. 超时（1 小时）：`{"status":"error","timestamp":"...","error":"Time out."}`
+
+        注意：Apifox 导入后需手动将响应类型设为 SSE / text/event-stream。
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: 由 `/api/predict` 或 `/api/train` 返回的任务 ID
+          schema:
+            type: string
+          example: "a1b2c3d4"
+      responses:
+        "200":
+          description: SSE 事件流
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: |
+                  SSE 数据格式（每行以 `data: ` 开头，双换行结尾）：
+
+                  `data: {"status":"ok","timestamp":"...","message":"Progressing..."}`
+
+                  `data: {"status":"completed","error":null}`
+              examples:
+                progressing:
+                  summary: 进行中
+                  value: |
+                    data: {"status":"ok","timestamp":"2026-07-15T08:30:00+00:00","message":"Progressing..."}
+                completed:
+                  summary: 完成
+                  value: |
+                    data: {"status":"completed","error":null}
+                failed:
+                  summary: 失败
+                  value: |
+                    data: {"status":"failed","error":"RuntimeError('CUDA out of memory')"}
+
+  # ── Export ──
+  /api/export/{task_id}:
+    get:
+      tags: [Task]
+      summary: 导出任务结果
+      description: |
+        下载训练或预测任务的结果 ZIP 包。
+
+        - 训练任务：下载 weights 目录下的所有权重文件
+        - 预测任务：下载 dataset 目录下的掩码与结果
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: 任务 ID
+          schema:
+            type: string
+          example: "a1b2c3d4"
+      responses:
+        "200":
+          description: ZIP 文件下载
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: attachment; filename=task_{task_id}.zip
+        "200-json":
+          description: 出错时返回 JSON
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── 前端页面 ──
+  /:
+    get:
+      tags: [System]
+      summary: 前端页面
+      description: 返回静态 HTML 页面。
+      responses:
+        "200":
+          description: HTML 页面
+          content:
+            text/html:
+              schema:
+                type: string
