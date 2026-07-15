@@ -21,6 +21,7 @@ services:
     ports:
       - "8000:8000"
       - "7860:7860"
+      - "5000:5000"
     ipc: host
     stdin_open: true
     tty: true

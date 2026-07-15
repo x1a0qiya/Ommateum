@@ -224,10 +224,10 @@ curl "http://localhost:5000/api/weights?model=yolov11"
 {
   "status": "ok",
   "data": {
-    "model": "yolov11",
-    "weights": [
+    "model_id": "yolov11",
+    "models": [
       {
-        "id": "yolov11n-default",
+        "id": "yolov11n",
         "name": "yolo11n 默认权重",
         "size_mb": 5.4,
         "accuracy": 0.952,
@@ -272,22 +272,22 @@ curl "http://localhost:5000/api/weights?model=yolov11"
 
 ### 4. 获取图片列表
 
-获取已上传的图片列表，可按类型筛选。
+获取已上传的图片列表，可按批次名称进行筛选。
 
 ```
-GET /api/images?type={normal|defect}
+GET /api/images?name={batch_name}
 ```
 
 **查询参数**：
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `type` | string | 否 | 筛选 `normal`（正常）或 `defect`（缺陷），不填返回全部 |
+| `name` | string | 是 | 筛选指定批次名称（如 `batch_20260714`）|
 
 **请求示例**：
 
 ```bash
-curl "http://localhost:5000/api/images?type=normal"
+curl "http://localhost:5000/api/images?name=batch_20260714"
 ```
 
 **响应示例**：
@@ -300,7 +300,7 @@ curl "http://localhost:5000/api/images?type=normal"
       {
         "id": "img_a1b2c3d4",
         "name": "sample_001.jpg",
-        "type": "normal",
+        "batch_name": "batch_20260714",
         "size_kb": 245,
         "url": "/api/files/img_a1b2c3d4.jpg",
         "width": 224,
@@ -313,11 +313,13 @@ curl "http://localhost:5000/api/images?type=normal"
 }
 ```
 
+**响应字段说明**：
+
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `images[].id` | string | 图片唯一标识符 |
 | `images[].name` | string | 原始文件名 |
-| `images[].type` | string | `normal` 或 `defect` |
+| `images[].batch_name` | string | 批次名称 |
 | `images[].size_kb` | number | 文件大小（KB） |
 | `images[].url` | string | 图片访问 URL |
 | `images[].width` | number | 图片宽度（px） |
@@ -326,30 +328,31 @@ curl "http://localhost:5000/api/images?type=normal"
 
 ---
 
-### 5. 上传图片
+### 5. 上传训练文件
 
-上传正常样本或缺陷样本图片。
+上传正常样本图片包、COCO 格式标注文件，以及可选的 Mask 图像包。
+如果不上传标注文件则标记为测试数据集.
 
 ```
-POST /api/images
+POST /api/dataset
 Content-Type: multipart/form-data
 ```
 
-**表单字段**：
+**表单字段 (Form Data)**：
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `file` | File | 是 | 图片文件（支持 jpg / png / webp） |
-| `type` | string | 是 | `normal`（正常样本）或 `defect`（缺陷样本） |
-| `model` | string | 否 | 关联模型 ID（可选） |
-| `weight` | string | 否 | 关联权重 ID（可选） |
+| `images_zip` | File | 是 | 正常图片压缩包（`.zip` 格式，支持内含 jpg / png / webp 格式图片） |
+| `annotation_json` | File | 否 | COCO 格式的标注文件（`.json` 格式） |
+| `masks_zip` | File | 否 | 对应的 Mask 图像压缩包（`.zip` 格式，支持内含掩码图片） |
 
 **请求示例**：
 
 ```bash
-curl -X POST http://localhost:5000/api/images \
-  -F "file=@./defect_001.jpg" \
-  -F "type=defect"
+curl -X POST http://localhost:5000/api/dataset \
+  -F "images_zip=@./normal_images.zip" \
+  -F "annotation_json=@./coco_annotations.json" \
+  -F "masks_zip=@./mask_images.zip"
 ```
 
 **响应示例**：
@@ -357,18 +360,72 @@ curl -X POST http://localhost:5000/api/images \
 ```json
 {
   "status": "ok",
-  "message": "上传成功",
   "data": {
-    "image": {
-      "id": "img_x1y2z3w4",
-      "name": "defect_001.jpg",
-      "type": "defect",
-      "size_kb": 312,
-      "url": "/api/files/img_x1y2z3w4.jpg",
-      "width": 224,
-      "height": 224,
-      "uploaded_at": "2026-07-08T12:00:00Z"
+    "batch_id": "batch_x1y2z3w4",
+    "uploaded_at": "2026-07-08T12:00:00Z",
+    "images_file": {
+      "name": "normal_images.zip",
+      "size_kb": 15360,
+      "image_count": 30
+    },
+    "annotation_file": {
+      "name": "coco_annotations.json",
+      "size_kb": 128
+    },
+    "masks_file": {
+      "name": "mask_images.zip",
+      "size_kb": 8192,
+      "mask_count": 30
     }
+  }
+}
+```
+
+**响应字段说明**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `batch_id` | string | 本次上传生成的批次唯一标识符 |
+| `uploaded_at` | string | 上传时间 (ISO 8601 格式) |
+| `images_file.name` | string | 正常图片压缩包的文件名 |
+| `images_file.size_kb` | number | 正常图片压缩包文件大小（KB） |
+| `images_file.image_count` | number | 压缩包内解析出的图片数量 |
+| `annotation_file.name` | string | 标注 json 文件名 |
+| `annotation_file.size_kb` | number | 标注 json 文件大小（KB） |
+| `masks_file` | object | 可选 Mask 图像压缩包的信息（未上传时该字段为 `null`） |
+| `masks_file.name` | string | Mask 图像压缩包的文件名 |
+| `masks_file.size_kb` | number | Mask 图像压缩包文件大小（KB） |
+| `masks_file.mask_count` | number | 压缩包内解析出的 Mask 图片数量 |
+
+---
+
+### 6. 删除批次数据
+
+删除指定 `name` 的批次数据，包括该批次下的所有图片、标注及关联文件。
+
+```
+DELETE /api/batches/{name}
+```
+
+**路径参数**：
+
+| 参数 | 说明 |
+|------|------|
+| `name` | 批次名称（支持中英文、数字、下划线等标识符） |
+
+**请求示例**：
+
+```bash
+curl -X DELETE http://localhost:5000/api/batches/batch_20260714
+```
+
+**响应示例**：
+
+```json
+{
+  "status": "ok",
+  "data": {
+    "id": "batch_20260714"
   }
 }
 ```
@@ -376,57 +433,9 @@ curl -X POST http://localhost:5000/api/images \
 **前端 JavaScript 调用方式**：
 
 ```javascript
-const fd = new FormData();
-fd.append('file', file);        // File 对象
-fd.append('type', 'normal');    // 'normal' | 'defect'
-if (modelId) fd.append('model', modelId);
-if (weightId) fd.append('weight', weightId);
-
-const res = await fetch('/api/images', {
-  method: 'POST',
-  body: fd
-});
+const batchName = 'batch_20260714';
+const res = await fetch(`/api/batches/${encodeURIComponent(batchName)}`, { method: 'DELETE' });
 const data = await res.json();
-const uploadedImage = data.data.image;
-```
-
----
-
-### 6. 删除图片
-
-删除已上传的图片及其文件。
-
-```
-DELETE /api/images/{img_id}
-```
-
-**路径参数**：
-
-| 参数 | 说明 |
-|------|------|
-| `img_id` | 图片唯一标识符 |
-
-**请求示例**：
-
-```bash
-curl -X DELETE http://localhost:5000/api/images/img_a1b2c3d4
-```
-
-**响应示例**：
-
-```json
-{
-  "status": "ok",
-  "message": "已删除"
-}
-```
-
-**前端 JavaScript 调用方式**：
-
-```javascript
-const res = await fetch(`/api/images/${imageId}`, { method: 'DELETE' });
-const data = await res.json();
-// 成功后从本地列表中移除该图片
 ```
 
 ---
@@ -446,7 +455,7 @@ Content-Type: application/json
 {
   "model": "yolov11",
   "weight": "yolov11n-default",
-  "image_ids": ["img_a1b2c3d4", "img_e5f6g7h8"]
+  "batch_name": "x1y2z3"
 }
 ```
 
@@ -454,7 +463,7 @@ Content-Type: application/json
 |------|------|------|------|
 | `model` | string | 是 | 模型 ID |
 | `weight` | string | 是 | 权重 ID |
-| `image_ids` | string[] | 是 | 待检测图片 ID 列表 |
+| `batch_name` | string[] | 是 | 待检测图片批次名称 |
 | `conf` | number | 否 | 置信度阈值，默认 `0.25` |
 | `iou` | number | 否 | NMS IoU 阈值，默认 `0.7` |
 | `imgsz` | number | 否 | 推理输入尺寸，默认 `640` |
@@ -464,7 +473,7 @@ Content-Type: application/json
 ```bash
 curl -X POST http://localhost:5000/api/predict \
   -H "Content-Type: application/json" \
-  -d '{"model":"yolov11","weight":"yolov11n-default","image_ids":["img_a1b2c3d4","img_e5f6g7h8"]}'
+  -d '{"model":"yolov11","weight":"yolov11n-default","batch_name":"x1y2z3"}'
 ```
 
 **响应示例**：
@@ -473,62 +482,10 @@ curl -X POST http://localhost:5000/api/predict \
 {
   "status": "ok",
   "data": {
-    "task_id": "task_a1b2c3d4e5f6",
-    "status": "done",
-    "results": [
-      {
-        "image_id": "img_a1b2c3d4",
-        "image_name": "sample_001.jpg",
-        "verdict": "normal",
-        "confidence": 0.962,
-        "severity": null,
-        "defect_type": null,
-        "score_map_url": "/api/files/img_a1b2c3d4_score.png",
-        "processing_ms": 47.2,
-        "expected_verdict": "normal"
-      },
-      {
-        "image_id": "img_e5f6g7h8",
-        "image_name": "defect_001.jpg",
-        "verdict": "defect",
-        "confidence": 0.937,
-        "severity": "medium",
-        "defect_type": "scratch",
-        "score_map_url": "/api/files/img_e5f6g7h8_score.png",
-        "processing_ms": 51.8,
-        "expected_verdict": "defect"
-      }
-    ],
-    "summary": {
-      "total": 2,
-      "defect_count": 1,
-      "normal_count": 1,
-      "accuracy": 1.0
-    }
+      "task_id": "x1y2z3",
   }
 }
 ```
-
-**结果字段说明**：
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `results[].image_id` | string | 图片 ID |
-| `results[].image_name` | string | 图片文件名 |
-| `results[].model` | string | 实际使用的模型 ID |
-| `results[].weight` | string | 实际使用的权重 ID |
-| `results[].verdict` | string | 判定结果：`normal`（正常）或 `defect`（缺陷） |
-| `results[].confidence` | number | 置信度，范围 0~1 |
-| `results[].severity` | string\|null | 严重程度：`medium`（默认）/ `critical`（confidence > 0.93），正常时为 `null` |
-| `results[].defect_type` | string\|null | 缺陷类型：如 `scratch`、`dent`、`crack` 等 |
-| `results[].score_map_url` | string\|null | 热力图 URL（如支持） |
-| `results[].processing_ms` | number | 单张处理耗时（毫秒） |
-| `results[].expected_verdict` | string | 期望结果（上传时指定的 type） |
-| `summary.total` | number | 检测总数 |
-| `summary.defect_count` | number | 缺陷数 |
-| `summary.normal_count` | number | 正常数 |
-| `summary.accuracy` | number | 整体准确率 |
-| `summary.sam2_miou` | number\|null | SAM2 分割评估 mIoU（未配置 SAM2 时为 `null`） |
 
 **前端 JavaScript 调用方式**：
 
@@ -569,27 +526,12 @@ GET /api/tasks/{task_id}
 curl http://localhost:5000/api/tasks/task_a1b2c3d4e5f6
 ```
 
-**响应示例**（与 `/predict` 返回的 `data` 结构一致）：
+**响应示例**
 
 ```json
 {
   "status": "ok",
-  "data": {
-    "id": "task_a1b2c3d4e5f6",
-    "status": "done",
-    "model": "yolov11",
-    "weight": "yolov11n-default",
-    "image_ids": ["img_a1b2c3d4", "img_e5f6g7h8"],
-    "results": [],
-    "created_at": "2026-07-08T12:00:00Z",
-    "completed_at": "2026-07-08T12:00:00Z",
-    "summary": {
-      "total": 0,
-      "defect_count": 0,
-      "normal_count": 0,
-      "accuracy": 0
-    }
-  }
+  "message": "Progressing..."
 }
 ```
 
@@ -614,8 +556,7 @@ Content-Type: application/json
     "yolo_lr": 0.001,
     "pretrained": "yolo11n.pt"
   },
-  "normal_image_ids": ["img_n1", "img_n2"],
-  "defect_image_ids": ["img_d1", "img_d2"]
+  "batch_name": "x1y2z3"
 }
 ```
 
@@ -626,10 +567,9 @@ Content-Type: application/json
 | `params.sam2_epochs` | number | 否 | SAM2 训练轮数，默认 `8`（需配置 SAM2 才生效） |
 | `params.yolo_lr` | number | 否 | YOLO 学习率，默认 `0.001` |
 | `params.pretrained` | string | 否 | 预训练权重名，默认 `yolo11n.pt` |
-| `normal_image_ids` | string[] | 是 | 正常样本图片 ID 列表（至少 1 张） |
-| `defect_image_ids` | string[] | 是 | 缺陷样本图片 ID 列表（至少 1 张） |
+| `batch_name` | string | 是 | 训练图片批次 |
 
-> 至少需要一张训练图片（正常或缺陷均可）。`yolo_epochs` 越界（<1 或 >200）会返回 400。
+> 至少需要一张训练图片。`yolo_epochs` 越界（<1 或 >200）会返回 400。
 
 **请求示例**：
 
