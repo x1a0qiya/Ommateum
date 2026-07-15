@@ -1,5 +1,5 @@
-from ommateum.models.identify.train import train_yolo_model
-from ommateum.models.sam2.train import train_sam2
+from identify.train import train_yolo_model
+from sam2.train import train_sam2
 import argparse
 import torch
 import json

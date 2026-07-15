@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.ommateum.models.test import segment
 from src.ommateum.models.train import train_model
-from scripts.identify.generate_data_yaml import coco2yolo
+from src.ommateum.models.identify.generate_data_yaml import coco2yolo
 
 WEIGHTS_DIR = os.path.join(api_utils.get_root_dir(), 'weights')
 DATASET_DIR = os.path.join(api_utils.get_root_dir(), 'dataset')
