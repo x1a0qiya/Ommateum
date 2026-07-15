@@ -4,6 +4,7 @@ from argparse import Namespace
 from utils import get_datetime
 from src.ommateum.models.test import segment
 from src.ommateum.models.train import train_model
+from scripts.identify.generate_data_yaml import coco2yolo
 
 WEIGHTS_DIR = os.path.join(utils.get_root_dir(), 'weights')
 DATASET_DIR = os.path.join(utils.get_root_dir(), 'dataset')
@@ -294,10 +295,20 @@ def train(data: str | None) -> dict:
 
         task_id = str(uuid.uuid4())[:8]
 
-        batch_dir =  os.path.join(DATASET_DIR, data['batch_name'])
+        batch_dir = os.path.join(DATASET_DIR, data['batch_name'])
         images_dir = os.path.join(batch_dir, 'images')
+        json_name = os.path.join(batch_dir, 'coco_annotations.json')
+
+        coco2yolo_args = Namespace(
+            coco_json=json_name,
+        )
+        coco2yolo(coco2yolo_args)
+
+
+        train_dir = os.path.join(batch_dir, 'train')
         masks_dir = os.path.join(batch_dir, 'masks')
-        labels_dir = os.path.join(batch_dir, 'labels')
+        labels_dir = os.path.join(train_dir, 'labels')
+        train_images_dir = os.path.join(train_dir, 'images')
         weights_dir = os.path.join(WEIGHTS_DIR, task_id)
         yolo_path = os.path.join(weights_dir, 'yolo')
         sam2_lora_dir = os.path.join(weights_dir, 'sam2')
@@ -305,11 +316,13 @@ def train(data: str | None) -> dict:
 
         custom_args = Namespace(
             save_path=sam2_lora_dir,
-            image_dir=images_dir,
+            image_dir=train_images_dir,
             label_dir=labels_dir,
             mask_dir=masks_dir,
             data_yaml=data_yaml_path,
-            weights_output_path=yolo_path
+            weights_output_path=yolo_path,
+            id=task_id,
+            weights_dir=weights_dir
         )
 
         utils.update_namespace_from_dict(
@@ -381,9 +394,3 @@ def pack_directory_to_temp_zip(task_id: str) -> str:
     )
 
     return temp_zip_path
-
-def stats() -> dict:
-    ...
-
-def get_file(filename: str) -> dict:
-    ...

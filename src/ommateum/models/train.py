@@ -91,21 +91,22 @@ def train_model(args=None):
             weights_output_path=args.weights_output_path
         )
 
-    train_sam2(
-        model_path=args.model_path,
-        save_path=args.save_path,
-        image_dir=args.image_dir,
-        label_dir=args.label_dir,
-        mask_dir=args.mask_dir,
-        epochs=args.sam2_epochs,
-        batch_size=args.sam2_batch_size,
-        lowvram=args.lowvram,
-        lora_rank=args.lora_rank,
-        use_dora=args.use_dora,
-        device=args.device,
-        lr=args.sam2_lr,
-        weight_decay=args.weight_decay,
-    )
+    if os.path.exists(args.mask_dir):
+        train_sam2(
+            model_path=args.model_path,
+            save_path=args.save_path,
+            image_dir=args.image_dir,
+            label_dir=args.label_dir,
+            mask_dir=args.mask_dir,
+            epochs=args.sam2_epochs,
+            batch_size=args.sam2_batch_size,
+            lowvram=args.lowvram,
+            lora_rank=args.lora_rank,
+            use_dora=args.use_dora,
+            device=args.device,
+            lr=args.sam2_lr,
+            weight_decay=args.weight_decay,
+        )
 
     if 'id' in args:
         config = {

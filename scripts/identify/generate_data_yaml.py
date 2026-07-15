@@ -327,8 +327,7 @@ def _copy_files(
         if os.path.exists(src_lbl_path):
             shutil.copy2(src_lbl_path, os.path.join(dst_lbl, lbl_file))
 
-
-if __name__ == "__main__":
+def parse_args():
     parser = argparse.ArgumentParser(description="生成 YOLO data.yaml 配置文件")
     # ── 模式 A: COCO JSON ──
     parser.add_argument("--coco_json", default=None,
@@ -349,8 +348,13 @@ if __name__ == "__main__":
     parser.add_argument("--output", default="dataset/data.yaml",
                         help="输出 data.yaml 的路径（模式 A 下可省略，自动生成到 JSON 同级）")
     parser.add_argument("--seed", type=int, default=42, help="随机种子（用于 train/val 划分）")
-    args = parser.parse_args()
+    args = parser.parse_args()    
+    return args
 
+def coco2yolo(args=None):
+    if args is None:
+        args = parse_args()
+        
     # ── 模式 A: COCO JSON ──
     if args.coco_json:
         generate_data_yaml(
@@ -380,3 +384,6 @@ if __name__ == "__main__":
             val_split=args.val_split,
             seed=args.seed,
         )
+
+if __name__ == "__main__":
+    coco2yolo()
