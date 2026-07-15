@@ -10,7 +10,6 @@
 - **缺陷检测** &nbsp;基于 YOLOv11 的目标检测，精确定位缺陷区域
 - **缺陷分割** &nbsp;SAM2 的 LoRA/QLoRA 微调，输出像素级掩码
 - **用户数据训练** &nbsp;上传自己的正常/缺陷图片，在线训练专属模型
-- **RAG 缺陷检索** &nbsp;ChromaDB + CLIP/ResNet 向量索引，相似缺陷搜索与主动学习
 - **RESTful API** &nbsp;完整的模型管理、训练、推理接口，可集成到任意前端
 - **Web 前端** &nbsp;内置单文件 HTML 界面，浅色清新主题，零构建步骤
 
@@ -94,9 +93,7 @@ python app.py
 ommateum/
 ├── src/ommateum/
 │   ├── models/           # YOLOv11 + SAM2 训练与推理
-│   ├── services/         # RAG 缺陷检索 + 主动学习
-│   ├── utils/            # Embedding、SAHI 切片推理
-│   └── database/         # ChromaDB 持久化
+│   ├── utils/            # SAHI 切片推理
 ├── scripts/              # 训练 / 评估 / 数据合成脚本
 ├── skills/ommateum-api/  # Flask API + Web 前端
 ├── tests/                # 单元测试
@@ -108,7 +105,6 @@ ommateum/
 ## 技术栈
 
 - **检测 / 分割** — YOLOv11、SAM2
-- **向量检索** — ChromaDB、CLIP、ResNet50
 - **后端** — Python Flask
 - **前端** — 原生 HTML + CSS + JavaScript（零框架）
 - **部署** — Docker + nginx 反向代理

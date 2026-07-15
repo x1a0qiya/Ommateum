@@ -700,7 +700,6 @@ select.field:disabled { opacity: 0.5; cursor: not-allowed; }
 .result-info { flex: 1; min-width: 0; }
 .result-info .ri-name { font-size: 14px; font-weight: 500; margin-bottom: 3px; color: var(--text-0); }
 .result-info .ri-detail { font-size: 12px; color: var(--text-2); font-family: ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; }
-.rag-badge { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; font-family: ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; background: rgba(139, 92, 246, 0.15); color: #7c3aed; cursor: help; vertical-align: middle; }
 .result-verdict { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
 .conf-bar { width: 100px; height: 6px; border-radius: 999px; background: var(--bg-3); overflow: hidden; }
 .conf-bar .fill { height: 100%; border-radius: 999px; transition: width 600ms var(--ease); }

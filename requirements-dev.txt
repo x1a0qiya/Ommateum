@@ -29,8 +29,6 @@ pyyaml>=6.0
 matplotlib>=3.7.0
 
 sahi
-chromadb
-sentence-transformers 
 Flask==3.0.3            # 后端通信
 flask-cors==4.0.1
 Pillow==10.4.0

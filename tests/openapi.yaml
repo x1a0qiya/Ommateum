@@ -70,9 +70,6 @@ components:
         trained_weights:
           type: integer
           description: 已训练模型权重数
-        rag_available:
-          type: boolean
-
     HealthResponse:
       type: object
       properties:
@@ -364,7 +361,6 @@ paths:
                       models: 1
                       images: 3
                       trained_weights: 2
-                      rag_available: true
                 error:
                   summary: 异常
                   value:

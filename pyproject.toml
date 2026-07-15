@@ -10,7 +10,6 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
 dependencies = [
-    "chromadb>=0.5",
     "pillow>=10.0",
     "numpy>=1.24",
 ]

@@ -30,8 +30,7 @@ def health_check() -> dict:
                 "version": "1.0.0",
                 "models": 1,
                 "images": img_num,
-                "trained_weights": weights_num,
-                "rag_available": True
+                "trained_weights": weights_num
             }
         }
     except Exception as e:

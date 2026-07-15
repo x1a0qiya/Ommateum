@@ -136,8 +136,7 @@ curl http://localhost:5000/api/health
     "version": "2.0.1",
     "models": 1,
     "images": 12,
-    "trained_weights": 0,
-    "rag_available": true
+    "trained_weights": 0
   }
 }
 ```
@@ -149,7 +148,6 @@ curl http://localhost:5000/api/health
 | `models` | number | 可用模型数量 |
 | `images` | number | 已上传图片总数 |
 | `trained_weights` | number | 已训练权重数量 |
-| `rag_available` | boolean | 后端是否已集成 Ommateum RAG / Embedding 模块 |
 
 ---
 
@@ -442,7 +440,7 @@ const data = await res.json();
 
 ### 7. 执行缺陷检测
 
-对指定图片执行缺陷检测推理。后端会调用真实的 YOLO 检测（`models/identify/generate_result.py`）与可选的 SAM2 分割评估（`models/sam2/test.py`，需配置 `OMMATEUM_SAM2_MODEL` 等环境变量），并将结果写入 RAG（ChromaDB）。
+对指定图片执行缺陷检测推理。后端会调用真实的 YOLO 检测（`models/identify/generate_result.py`）与可选的 SAM2 分割评估（`models/sam2/test.py`，需配置 `OMMATEUM_SAM2_MODEL` 等环境变量）。
 
 ```
 POST /api/predict
@@ -864,7 +862,7 @@ curl http://localhost:5000/api/stats
 | `trained_weights` | number | 已训练权重数 |
 | `training_tasks` | number | 训练任务总数 |
 | `recent_accuracy` | number | 最近平均检测准确率 |
-| `rag_records` | number | RAG（ChromaDB）中已索引的缺陷记录数 |
+
 
 ---
 
