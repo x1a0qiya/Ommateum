@@ -290,4 +290,3 @@ def update_namespace_from_dict(
     for key in keys_to_update:
         if key in data_dict:
             setattr(args_obj, key, data_dict[key])
-

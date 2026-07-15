@@ -1,7 +1,8 @@
 import os, sys
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(parent_dir)
-sys.path.append('')
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.abspath(os.path.join(current_dir, ".."))
+sys.path.append(current_dir)   # src/ommateum/models/  → for identify, sam2
+sys.path.append(parent_dir)    # src/ommateum/         → for utils
 
 import argparse
 import torch

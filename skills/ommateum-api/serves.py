@@ -1,13 +1,17 @@
 import os, uuid, json, threading, tempfile, shutil
-import utils
+import api_utils
 from argparse import Namespace
-from utils import get_datetime
+from api_utils import get_datetime
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
 from src.ommateum.models.test import segment
 from src.ommateum.models.train import train_model
 from scripts.identify.generate_data_yaml import coco2yolo
 
-WEIGHTS_DIR = os.path.join(utils.get_root_dir(), 'weights')
-DATASET_DIR = os.path.join(utils.get_root_dir(), 'dataset')
+WEIGHTS_DIR = os.path.join(api_utils.get_root_dir(), 'weights')
+DATASET_DIR = os.path.join(api_utils.get_root_dir(), 'dataset')
 task_events = {} #{ task_id: { "event": threading.Event(), "status": "processing", "error": None, "task": "train" } }
 
 
@@ -16,8 +20,8 @@ def get_api() -> dict:
 
 def health_check() -> dict:
     try:
-        weights_num = utils.count_path_items(WEIGHTS_DIR)
-        img_num = utils.count_path_items(DATASET_DIR)
+        weights_num = api_utils.count_path_items(WEIGHTS_DIR)
+        img_num = api_utils.count_path_items(DATASET_DIR)
         return {
             "status": "ok",
             "timestamp": get_datetime(),
@@ -39,7 +43,7 @@ def health_check() -> dict:
 
 def get_models() -> dict:
     try:
-        configs = utils.get_model_configs(WEIGHTS_DIR)
+        configs = api_utils.get_model_configs(WEIGHTS_DIR)
         return {
             'status': 'ok',
             'timestamp': get_datetime(),
@@ -54,7 +58,7 @@ def get_models() -> dict:
 
 def get_weights(model_id: str | None) -> dict:
     try:
-        configs = utils.get_model_configs(WEIGHTS_DIR, model_id=model_id)
+        configs = api_utils.get_model_configs(WEIGHTS_DIR, model_id=model_id)
         configs['model_id'] = model_id
         return {
             'status': 'ok',
@@ -77,7 +81,7 @@ def get_images(name: str | None) -> dict:
         }
     try:
         dataset_dir = os.path.join(DATASET_DIR, name, 'images')
-        imgs = utils.scan_images(dataset_dir, name)
+        imgs = api_utils.scan_images(dataset_dir, name)
         return {
             'status': 'ok',
             'timestamp': get_datetime(),
@@ -106,7 +110,7 @@ def upload_zip(images_zip, annotation_json, masks_zip) -> dict:
         id = str(uuid.uuid4()).replace('-', '')
         dir = os.path.join(DATASET_DIR, id)
         img_name = images_zip.filename
-        img_info = utils.handle_zip_upload(
+        img_info = api_utils.handle_zip_upload(
             file_stream=images_zip,
             original_filename=img_name,
             base_save_dir=dir,
@@ -122,7 +126,7 @@ def upload_zip(images_zip, annotation_json, masks_zip) -> dict:
         }
 
         if annotation_json is not None:
-            ann_info = utils.save_json_file(
+            ann_info = api_utils.save_json_file(
                 json_data=annotation_json,
                 base_save_dir=dir,
                 name='',
@@ -135,7 +139,7 @@ def upload_zip(images_zip, annotation_json, masks_zip) -> dict:
 
         if masks_zip is not None:
             msk_name = masks_zip.filename
-            msk_info = utils.handle_zip_upload(
+            msk_info = api_utils.handle_zip_upload(
                 file_stream=masks_zip,
                 original_filename=msk_name,
                 base_save_dir=dir,
@@ -158,7 +162,7 @@ def upload_zip(images_zip, annotation_json, masks_zip) -> dict:
     
 def delete_batch(name: str) -> dict:
     try:
-        utils.handle_batch_delete(DATASET_DIR, name)
+        api_utils.handle_batch_delete(DATASET_DIR, name)
         return {
             'status': 'ok',
             'timestamp': get_datetime(),
@@ -199,7 +203,7 @@ def predict(data: str | None) -> dict:
         weights_dir = os.path.join(WEIGHTS_DIR, data['weight'])
         yolo_path = os.path.join(weights_dir, 'yolo', data['weight']+'_best.pt')
         sam2_lora_dir = os.path.join(weights_dir, 'sam2')
-        mx_sz = max(utils.scan_images_max_size(images_dir, ''))
+        mx_sz = max(api_utils.scan_images_max_size(images_dir, ''))
         
         custom_args = Namespace(
             images_dir=images_dir,
@@ -210,7 +214,7 @@ def predict(data: str | None) -> dict:
             project=batch_dir,
         )
 
-        utils.update_namespace_from_dict(
+        api_utils.update_namespace_from_dict(
             args_obj=custom_args,
             data_dict=data,
             keys_to_update=[
@@ -325,7 +329,7 @@ def train(data: str | None) -> dict:
             weights_dir=weights_dir
         )
 
-        utils.update_namespace_from_dict(
+        api_utils.update_namespace_from_dict(
             args_obj=custom_args,
             data_dict=params,
             keys_to_update=[
