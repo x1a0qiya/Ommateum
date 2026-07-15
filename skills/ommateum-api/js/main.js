@@ -369,13 +369,11 @@ const API = (function() {
     datasetUpload: (formData) => req('/dataset', { method: 'POST', body: formData }),
     deleteBatch: (name) => req('/batches/' + encodeURIComponent(name), { method: 'DELETE' }),
     predict:    (payload) => req('/predict', { method: 'POST', body: payload }),
-    task:       (id) => req('/tasks/' + encodeURIComponent(id)),
+    task:       (id) => req('/task/' + encodeURIComponent(id)),
     train:      (payload) => req('/train', { method: 'POST', body: payload }),
     trainStatus:(id) => req('/train/' + encodeURIComponent(id)),
     trainHistory: () => req('/training-history'),
     exportUrl:  (id) => base + '/export/' + encodeURIComponent(id),
-    errorLogs:  (limit) => req('/logs/errors' + (limit ? '?limit=' + limit : '')),
-    clearErrors: () => req('/logs/errors', { method: 'DELETE' }),
   };
 })();
 
@@ -663,22 +661,75 @@ async function deleteBatch(batchId) {
   try { await API.deleteBatch(batchId); toast('已删除批次', 'info'); }
   catch(e) { state.batches=prev; state.selectedBatch=state.batches.length>0?state.batches[0].batch_id:null; renderDatasetList(); updateStats(); updateTrainSummary(); checkReady(); refreshBatches(); toast('删除失败：'+e.message,'error'); }
 }
-async function runPredict() {
-  if(!state.selectedModel||!state.selectedWeight){toast('请先选择模型和权重','error');return;}
-  if(!state.selectedBatch){toast('请先上传数据集并选择批次','error');return;}
-  const overlay=$('#scanOverlay'); $('#scanLabel').textContent='正在执行缺陷检测…'; $('#scanSub').textContent='批次: '+state.selectedBatch; overlay.classList.add('show');
-  try{
-    var result=await API.predict({model:state.selectedModel,weight:state.selectedWeight,batch_name:state.selectedBatch});
-    if(result.task_id&&result.status!=='done')result=await pollTask(result.task_id)||result;
-    state.results=result.results||[];
-    renderDatasetList(); updateStats();
-    toast('检测完成，共 '+(state.results?state.results.length:0)+' 项结果','success');
-  }catch(e){toast('检测失败：'+e.message,'error');}
-  finally{overlay.classList.remove('show');}
+/* ---- Submit task via SSE (reusable helper) ---- */
+async function submitTask(batchName, weight) {
+  var taskId;
+  try {
+    var res = await fetch('/api/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ batch_name: batchName, weight: weight })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var data = await res.json();
+    var taskData = data.data || {};
+    if (data.status !== 'processing' || !taskData.task_id) {
+      throw new Error(taskData.error || data.error || '提交任务失败：未知状态');
+    }
+    taskId = taskData.task_id;
+  } catch (err) {
+    toast('提交任务失败: ' + err.message, 'error');
+    throw err;
+  }
+
+  return new Promise(function (resolve, reject) {
+    var es = new EventSource('/api/task-stream/' + encodeURIComponent(taskId));
+    es.onmessage = function (event) {
+      try {
+        var result = JSON.parse(event.data);
+        if (result.status === 'completed') {
+          es.close();
+          resolve(result);
+        } else if (result.status === 'failed' || result.status === 'error') {
+          es.close();
+          reject(new Error(result.error || result.message || '未知错误'));
+        }
+      } catch (e) { /* 忽略解析失败 */ }
+    };
+    es.onerror = function () {
+      if (es.readyState === EventSource.CLOSED) {
+        es.close();
+        reject(new Error('SSE 连接断开'));
+      }
+    };
+  });
 }
-async function pollTask(taskId){
-  for(var i=0;i<60;i++){await new Promise(r=>setTimeout(r,1000));var t=await API.task(taskId);if(t.status==='done'||t.status==='completed')return t;if(t.status==='failed'||t.status==='error')throw new Error(t.error||'检测任务失败');$('#scanLabel').textContent='检测中… '+Math.round((i+1)/60*100)+'%';}
-  throw new Error('检测超时');
+
+/* ---- Main workspace predict (SSE) ---- */
+async function runPredict() {
+  if (!state.selectedModel || !state.selectedWeight) { toast('请先选择模型和权重', 'error'); return; }
+  if (!state.selectedBatch) { toast('请先上传数据集并选择批次', 'error'); return; }
+  var overlay = $('#scanOverlay');
+  $('#scanLabel').textContent = '正在执行缺陷检测…';
+  $('#scanSub').textContent = '批次: ' + state.selectedBatch;
+  overlay.classList.add('show');
+  try {
+    var sseResult = await submitTask(state.selectedBatch, state.selectedWeight);
+    var t = await API.task(sseResult.task_id);
+    state.results = t.results || [];
+    overlay.classList.remove('show');
+    if (state.results.length) {
+      var nd = state.results.filter(function (r) { return r.verdict === 'defect'; }).length;
+      toast('检测完成，共 ' + state.results.length + ' 项结果（缺陷 ' + nd + ' 张）', 'success');
+    } else {
+      toast('检测完成，未发现缺陷', 'info');
+    }
+    renderDatasetList();
+    updateStats();
+  } catch (e) {
+    overlay.classList.remove('show');
+    toast('检测失败：' + e.message, 'error');
+  }
 }
 
 /* ---- Results (workspace: condensed toast summary) ---- */
@@ -1009,12 +1060,18 @@ function setupInfBatch() {
 async function runInfPredict() {
   if(!state.infSelectedModel||!state.infSelectedWeight){toast('请先选择模型和权重','error');return;}
   if(!state.infBatchName){toast('请选择或输入数据批次','error');return;}
-  const overlay=$('#scanOverlay');$('#scanLabel').textContent='正在执行缺陷检测…';overlay.classList.add('show');
+  var overlay=$('#scanOverlay');$('#scanLabel').textContent='正在执行缺陷检测…';overlay.classList.add('show');
   try{
-    var task=await API.predict({model:state.infSelectedModel,weight:state.infSelectedWeight,batch_name:state.infBatchName});
-    state.infResults=task.results||[];renderInfResults();toast('检测完成，共 '+state.infResults.length+' 项结果','success');
-  }catch(e){toast('检测失败: '+e.message,'error');}
-  finally{overlay.classList.remove('show');}
+    var sseResult=await submitTask(state.infBatchName,state.infSelectedWeight);
+    var t=await API.task(sseResult.task_id);
+    state.infResults=t.results||[];
+    overlay.classList.remove('show');
+    renderInfResults();
+    toast('检测完成，共 '+(state.infResults?state.infResults.length:0)+' 项结果','success');
+  }catch(e){
+    overlay.classList.remove('show');
+    toast('检测失败: '+e.message,'error');
+  }
 }
 function renderInfResults() {
   var tb=$('#infResultsToolbar'),empty=$('#infResultsEmpty'),list=$('#infResultsList');list.innerHTML='';
@@ -1044,81 +1101,6 @@ async function loadStats() {
     }
     if (data.trained_weights != null) $('#statTrained').textContent = data.trained_weights;
   } catch (e) { /* silent */ }
-}
-
-/* ---- Error log viewer ---- */
-async function loadErrors() {
-  try {
-    var data = await API.errorLogs(50);
-    var errors = data.errors || [];
-    var el = $('#errIndicator');
-    if (errors.length > 0) {
-      el.style.display = 'flex';
-      $('#errCount').textContent = errors.length > 99 ? '99+' : errors.length;
-    } else {
-      el.style.display = 'none';
-    }
-  } catch (e) { /* silent */ }
-}
-
-function renderErrorModal() {
-  API.errorLogs(50).then(function (data) {
-    var errors = data.errors || [];
-    var body = $('#errModalBody');
-    $('#errModalTotal').textContent = '共 ' + data.total + ' 条';
-
-    if (errors.length === 0) {
-      body.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-3);">暂无错误记录</div>';
-      return;
-    }
-
-    var html = '<table class="err-table"><thead><tr><th>时间</th><th>类型</th><th>错误信息</th><th>端点</th><th>Traceback</th></tr></thead><tbody>';
-    errors.forEach(function (e) {
-      var ts = e.timestamp ? new Date(e.timestamp).toLocaleString('zh-CN') : '—';
-      var tb = e.traceback && e.traceback.length > 0 ? e.traceback.slice(-2).join('\n') : '';
-      html += '<tr>' +
-        '<td class="err-ts">' + ts + '</td>' +
-        '<td class="err-type">' + (e.error_type || '—') + '</td>' +
-        '<td class="err-msg" title="' + (e.error_message || '').replace(/"/g, '&quot;') + '">' + (e.error_message || '—') + '</td>' +
-        '<td class="err-ts">' + (e.method || '') + ' ' + (e.endpoint || '—') + '</td>' +
-        '<td class="err-tb" title="' + tb.replace(/"/g, '&quot;') + '">' + (tb ? tb.replace(/\n/g, ' › ') : '—') + '</td>' +
-        '</tr>';
-    });
-    html += '</tbody></table>';
-    body.innerHTML = html;
-  }).catch(function () {
-    $('#errModalBody').innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-3);">加载失败</div>';
-  });
-}
-
-function setupErrorModal() {
-  $('#errIndicator').addEventListener('click', function () { openErrModal(); });
-  $('#errClose').addEventListener('click', closeErrModal);
-  $('#errModal').addEventListener('click', function (e) { if (e.target === $('#errModal')) closeErrModal(); });
-  $('#errClearBtn').addEventListener('click', function () {
-    API.clearErrors().then(function () {
-      renderErrorModal();
-      loadErrors();
-      toast('错误日志已清空', 'success');
-    }).catch(function () { toast('清空失败', 'error'); });
-  });
-}
-
-function openErrModal() {
-  var m = $('#errModal');
-  m.style.display = 'flex';
-  var modal = m.querySelector('.t-modal');
-  modal.classList.remove('is-closing');
-  requestAnimationFrame(function () { modal.classList.add('is-open'); });
-  renderErrorModal();
-}
-function closeErrModal() {
-  var m = $('#errModal');
-  var modal = m.querySelector('.t-modal');
-  var closeMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur')) || 150;
-  modal.classList.remove('is-open');
-  modal.classList.add('is-closing');
-  setTimeout(function () { modal.classList.remove('is-closing'); m.style.display = 'none'; }, closeMs);
 }
 
 /* ---- Scroll reveal ---- */
@@ -1269,7 +1251,6 @@ async function init() {
   setupTrainingControls();
   setupReveal();
   setupMultiScreenScroll();
-  setupErrorModal();
   $('#predictBtn').addEventListener('click', runPredict);
   setupInfBatch();
   $('#infPredictBtn').addEventListener('click', runInfPredict);
@@ -1281,7 +1262,6 @@ async function init() {
   if (online) {
     await Promise.all([loadModels(), loadTrainingHistory(), loadStats(), loadInfModels()]);
     refreshDatasets();
-    loadErrors();
   } else {
     toast('API 后端未连接，请启动后端服务', 'error');
     $('#modelHint').textContent = '离线';
@@ -1289,7 +1269,6 @@ async function init() {
   checkReady();
   updateTrainSummary();
   setInterval(checkApiStatus, 30000);
-  setInterval(loadErrors, 45000);
   setupClickBlur();
 }
 

@@ -29,6 +29,10 @@ def api_images():
     name = request.args.get('name')
     return jsonify(serves.get_images(name))
 
+@app.route('/api/stats', methods=['GET'])
+def get_stats():
+    return jsonify(serves.get_stats())
+
 @app.route('/api/dataset', methods=['POST'])
 def upload_zip():
     images_zip = request.files.get('images_zip')
@@ -36,23 +40,35 @@ def upload_zip():
     masks_zip = request.files.get('masks_zip')
     return jsonify(serves.upload_zip(images_zip, annotation_json, masks_zip))
 
-@app.route('/api/images/<img_id>', methods=['DELETE'])
-def delete_batch(img_id):
-    return jsonify(serves.delete_batch(img_id))
+@app.route('/api/batches/<batch_id>', methods=['DELETE'])
+def delete_batch(batch_id):
+    return jsonify(serves.delete_batch(batch_id))
 
 @app.route('/api/predict', methods=['POST'])
 def predict():
     data = request.get_data(as_text=True) or None
     return jsonify(serves.predict(data))
 
-@app.route("/api/task/<task_id>", methods=['GET'])
-def get_task(task_id):
+@app.route("/api/task-stream/<task_id>", methods=['GET'])
+def get_task_stream(task_id):
     return Response(serves.event_generator(task_id), mimetype="text/event-stream")
+
+@app.route("/api/task/<task_id>", methods=['GET'])
+def get_task_json(task_id):
+    return jsonify(serves.get_task_status(task_id))
 
 @app.route('/api/train', methods=['POST'])
 def train():
     data = request.get_data(as_text=True) or None
     return jsonify(serves.train(data))
+
+@app.route('/api/train/<task_id>', methods=['GET'])
+def get_train_status(task_id):
+    return jsonify(serves.get_train_status(task_id))
+
+@app.route('/api/training-history', methods=['GET'])
+def get_training_history():
+    return jsonify(serves.get_training_history())
 
 @app.route("/api/export/<task_id>", methods=["GET"])
 def export_task(task_id):
