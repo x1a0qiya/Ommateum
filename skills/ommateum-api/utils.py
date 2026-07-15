@@ -1,10 +1,19 @@
-import os, json, hashlib, uuid
+import os, json, hashlib, uuid, tempfile, zipfile, shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from PIL import Image
 from models import SaveableFileStream
+from argparse import Namespace
 
 ALLOWED_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.bmp', '.webp')
+
+def get_root_dir() -> str:
+    """
+    返回根目录.
+    """
+    curr_path = Path(__file__).resolve()
+    root = curr_path.parent.parent
+    return str(root)
 
 def get_datetime() -> str:
     """
@@ -69,19 +78,16 @@ def get_model_configs(path: str, *, name: str | None = None, model_id: str | Non
     configs['total'] = total
     return configs
 
-def get_img_data(path: str, type: str | None) -> dict:
+def get_img_data(path: str, name: str) -> dict:
     """
     返回指定图片的数据.
 
     Args:
         path (str): 图片路径.
-        type (str | None): 图片类型.
+        name (str): 批次名称.
     Returns:
         dict: 数据 json.
     """
-    if type is not None or type is not 'normal' or type is not 'defect':
-        raise ValueError('type is illegal.')
-    
     sz_kb = round(os.path.getsize(path) / 1024, 1)
 
     with Image.open(path) as img:
@@ -97,101 +103,191 @@ def get_img_data(path: str, type: str | None) -> dict:
     return {
         'id': hash_id,
         'name': file_name,
-        'type': type,
+        'batch_name': name,
         'size_kb': sz_kb,
-        'url': f'/api/files/{type}/{file_name}',
+        'url': f'/api/files/{file_name}',
         'width': w,
         'height': h,
         'uploaded_at': uploaded_at
     }
 
-def scan_images(path: str, type: str | None = None) -> list:
+def scan_images(path: str, name: str) -> list:
     """
     扫描指定文件夹并返回图片数据列表.
 
     Args:
         path (str): 图片文件夹路径.
-        type (str | None): 图片类型.
+        name (str): 批次名称.
     Returns:
         list: 数据 json 列表.
     """
     imgs = []
 
-    floders = []
-    if type == 'normal' or type is None:
-        normal_path = os.path.join(path, 'normal', 'images')
-        floders.append((normal_path, 'normal'))
-    if type == 'defect' or type is None:
-        defect_path = os.path.join(path, 'defect', 'images')
-        floders.append((defect_path, 'defect'))
-
-    for folder_path, t in floders:
-        if not os.path.exists(folder_path):
-            continue
-        
-        for file_name in os.listdir(folder_path):
-            if file_name.lower().endswith(ALLOWED_EXTENSIONS):
-                full_path = os.path.join(folder_path, file_name)
-                meta = get_img_data(full_path, t)
-                if meta:
-                    imgs.append(meta)
+    for file_name in os.listdir(path):
+        if file_name.lower().endswith(ALLOWED_EXTENSIONS):
+            full_path = os.path.join(path, file_name)
+            meta = get_img_data(full_path, name)
+            if meta:
+                imgs.append(meta)
                     
     return imgs
 
-def handle_img_upload(
+def scan_images_max_size(path: str, name: str) -> tuple:
+    """
+    扫描指定文件夹并返回图片最大大小.
+
+    Args:
+        path (str): 图片文件夹路径.
+        name (str): 批次名称.
+    Returns:
+        tuple: 图片最大大小.
+    """
+    mx = (0, 0)
+
+    for file_name in os.listdir(path):
+        if file_name.lower().endswith(ALLOWED_EXTENSIONS):
+            full_path = os.path.join(path, file_name)
+            meta = get_img_data(full_path, name)
+            if meta:
+                mx = max(mx, (meta['width'], meta['height']))
+    return mx
+
+def handle_zip_upload(
     file_stream: SaveableFileStream,
     original_filename: str,
-    type: str | None,
-    base_save_dir: str
+    base_save_dir: str,
+    name: str
 ) -> dict:
     """
-    处理图片上传保存并解析的业务逻辑函数
-    
+    处理简单的 ZIP 上传, 仅解压并保存其内部文件, 返回基本批次信息.
+
     Args:
-        file_stream (SaveableFileStream): 具有 .save() 行为的文件流对象（如 Flask 中的 FileStorage）.
+        file_stream (SaveableFileStream): 文件流.
         original_filename (str): 原始文件名.
-        type (str): 'normal' 或 'defect'.
-        base_save_dir (str): 存放 normal 和 defect 文件夹的根目录.
-        
+        base_save_dir (str): 基础存储路径.
+        name (str): 作为保存文件的子目录.
     Returns:
-        dict: 包含解析后的图片元数据的字典。
+        dict: 返回保存成功的批次与基本文件信息.
     """
-    if type not in ['normal', 'defect']:
-        raise ValueError("Invalid type. Must be 'normal' or 'defect'")
+    _, zip_ext = os.path.splitext(original_filename.lower())
+    if zip_ext != '.zip':
+        raise ValueError("Unsupported file format. Only .zip files are allowed.")
 
-    _, ext = os.path.splitext(original_filename.lower())
-    if ext not in ALLOWED_EXTENSIONS:
-        raise ValueError(f"Unsupported file format: {ext}. Only {ALLOWED_EXTENSIONS} are allowed.")
-
-    target_dir: str = os.path.join(base_save_dir, type, 'images')
+    target_dir = os.path.join(base_save_dir, name)
     os.makedirs(target_dir, exist_ok=True)
 
-    unique_id: str = str(uuid.uuid4()).split('-')[0]  # 短 UUID (如 'a1b2c3d4')
-    new_filename: str = f"img_{unique_id}{ext}"
-    save_path: str = os.path.join(target_dir, new_filename)
-    file_stream.save(save_path)
+    saved_files = []
 
-    with Image.open(save_path) as img:
-        w, h = img.size
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_zip_path = os.path.join(temp_dir, "uploaded.zip")
+        file_stream.save(temp_zip_path)
 
-    size_kb: float = round(os.path.getsize(save_path) / 1024, 1)
+        if not zipfile.is_zipfile(temp_zip_path):
+            raise ValueError("The uploaded file is not a valid ZIP archive.")
 
-    mtime = os.path.getmtime(save_path)
-    uploaded_at = datetime.fromtimestamp(mtime).isoformat()+'Z'
+        with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
+            for file_info in zip_ref.infolist():
+                if file_info.is_dir():
+                    continue
+                
+                filename_lower = file_info.filename.lower()
+                if '__macosx' in filename_lower or os.path.basename(filename_lower).startswith('.'):
+                    continue
 
-    hash_obj = hashlib.sha256(new_filename.encode('utf-8'))
-    hash_id = hash_obj.hexdigest()
+                base_name = os.path.basename(file_info.filename)
+                save_path = os.path.join(target_dir, base_name)
+
+                with open(save_path, 'wb') as f:
+                    f.write(zip_ref.read(file_info.filename))
+                
+                saved_files.append(base_name)
+
+    mtime = os.path.getmtime(target_dir)
+    uploaded_at = datetime.fromtimestamp(mtime).isoformat() + 'Z'
+
+    sz_kb = round(os.path.getsize(target_dir) / 1024, 1)
 
     return {
-        "id": hash_id,
-        "name": new_filename,
-        "type": type,
-        "size_kb": size_kb,
-        "url": f"/api/files/{type}/{new_filename}",
-        "width": w,
-        "height": h,
+        "uploaded_at": uploaded_at,
+        "saved_files_count": len(saved_files),
+        "size_kb": sz_kb
+    }
+
+def save_json_file(
+    json_data: dict,
+    base_save_dir: str,
+    name: str,
+    filename: str = "annotation.json"
+) -> dict:
+    """
+    保存传入的 dict 数据为 JSON 文件, 并返回批次及文件信息.
+
+    Args:
+        json_data (dict): 需要保存的字典/JSON 数据.
+        base_save_dir (str): 基础存储路径.
+        name (str): 批次名称, 作为子文件夹名称.
+        filename (str): 保存的文件名, 默认为 "annotation.json"
+        
+    Returns:
+        dict: 包含 batch_id、保存路径和上传时间等信息。
+    """
+    if not isinstance(json_data, dict):
+        raise ValueError("json_data must be a dictionary.")
+
+    target_dir = os.path.join(base_save_dir, name)
+    os.makedirs(target_dir, exist_ok=True)
+
+    save_path = os.path.join(target_dir, filename)
+
+    with open(save_path, 'w', encoding='utf-8') as f:
+        json.dump(json_data, f, ensure_ascii=False, indent=4)
+
+    mtime = os.path.getmtime(target_dir)
+    uploaded_at = datetime.fromtimestamp(mtime).isoformat() + 'Z'
+
+    sz_kb = round(os.path.getsize(target_dir) / 1024, 1)
+
+    return {
+        "size_kb": sz_kb,
         "uploaded_at": uploaded_at
     }
 
-def handle_img_delete(img_id: str) -> None:
-    ...
+def handle_batch_delete(base_path: str, name: str) -> None:
+    """
+    删除指定名称的批次文件夹及其内部的所有文件.
+
+    Args:
+        base_path (str): 基础存储路径.
+        name (str): 批次文件夹名称.
+    Returns:
+        None:
+    """
+    target_dir = os.path.join(base_path, name)
+
+    if os.path.exists(target_dir):
+        if os.path.isdir(target_dir):
+            shutil.rmtree(target_dir)
+        else:
+            os.remove(target_dir)
+    else:
+        raise FileNotFoundError(f"Batch folder '{name}' not found at {base_path}")
+    
+def update_namespace_from_dict(
+        args_obj: Namespace,
+        data_dict: dict | None,
+        keys_to_update: list[str]
+    ) -> None:
+    """
+    如果字典中存在指定的键, 则将其动态同步到 Namespace 对象的属性中.
+    
+    Args:
+        args_obj (argparse.Namespace): 需要赋值的目标对象
+        data_dict (dict): 包含新数值的字典
+        keys_to_update: 需要检查并更新的键名列表
+    """
+    if data_dict is None:
+        return
+    for key in keys_to_update:
+        if key in data_dict:
+            setattr(args_obj, key, data_dict[key])
+

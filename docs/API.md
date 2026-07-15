@@ -482,62 +482,10 @@ curl -X POST http://localhost:5000/api/predict \
 {
   "status": "ok",
   "data": {
-    "task_id": "task_a1b2c3d4e5f6",
-    "status": "done",
-    "results": [
-      {
-        "image_id": "img_a1b2c3d4",
-        "image_name": "sample_001.jpg",
-        "verdict": "normal",
-        "confidence": 0.962,
-        "severity": null,
-        "defect_type": null,
-        "score_map_url": "/api/files/img_a1b2c3d4_score.png",
-        "processing_ms": 47.2,
-        "expected_verdict": "normal"
-      },
-      {
-        "image_id": "img_e5f6g7h8",
-        "image_name": "defect_001.jpg",
-        "verdict": "defect",
-        "confidence": 0.937,
-        "severity": "medium",
-        "defect_type": "scratch",
-        "score_map_url": "/api/files/img_e5f6g7h8_score.png",
-        "processing_ms": 51.8,
-        "expected_verdict": "defect"
-      }
-    ],
-    "summary": {
-      "total": 2,
-      "defect_count": 1,
-      "normal_count": 1,
-      "accuracy": 1.0
-    }
+      "task_id": "x1y2z3",
   }
 }
 ```
-
-**结果字段说明**：
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `results[].image_id` | string | 图片 ID |
-| `results[].image_name` | string | 图片文件名 |
-| `results[].model` | string | 实际使用的模型 ID |
-| `results[].weight` | string | 实际使用的权重 ID |
-| `results[].verdict` | string | 判定结果：`normal`（正常）或 `defect`（缺陷） |
-| `results[].confidence` | number | 置信度，范围 0~1 |
-| `results[].severity` | string\|null | 严重程度：`medium`（默认）/ `critical`（confidence > 0.93），正常时为 `null` |
-| `results[].defect_type` | string\|null | 缺陷类型：如 `scratch`、`dent`、`crack` 等 |
-| `results[].score_map_url` | string\|null | 热力图 URL（如支持） |
-| `results[].processing_ms` | number | 单张处理耗时（毫秒） |
-| `results[].expected_verdict` | string | 期望结果（上传时指定的 type） |
-| `summary.total` | number | 检测总数 |
-| `summary.defect_count` | number | 缺陷数 |
-| `summary.normal_count` | number | 正常数 |
-| `summary.accuracy` | number | 整体准确率 |
-| `summary.sam2_miou` | number\|null | SAM2 分割评估 mIoU（未配置 SAM2 时为 `null`） |
 
 **前端 JavaScript 调用方式**：
 
@@ -578,27 +526,12 @@ GET /api/tasks/{task_id}
 curl http://localhost:5000/api/tasks/task_a1b2c3d4e5f6
 ```
 
-**响应示例**（与 `/predict` 返回的 `data` 结构一致）：
+**响应示例**
 
 ```json
 {
   "status": "ok",
-  "data": {
-    "id": "task_a1b2c3d4e5f6",
-    "status": "done",
-    "model": "yolov11",
-    "weight": "yolov11n-default",
-    "image_ids": ["img_a1b2c3d4", "img_e5f6g7h8"],
-    "results": [],
-    "created_at": "2026-07-08T12:00:00Z",
-    "completed_at": "2026-07-08T12:00:00Z",
-    "summary": {
-      "total": 0,
-      "defect_count": 0,
-      "normal_count": 0,
-      "accuracy": 0
-    }
-  }
+  "message": "Progressing..."
 }
 ```
 

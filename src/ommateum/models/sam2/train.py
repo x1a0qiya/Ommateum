@@ -23,7 +23,6 @@ def train_sam2(
     device : str = 'cpu',
     lr : float = 2e-4,
     weight_decay : float = 1e-2,
-    name : str = '/trained'
 ) -> None:
     """
     微调模型
@@ -108,7 +107,7 @@ def train_sam2(
 
         print(f'Epoch {epoch + 1} finished with loss {epoch_loss:.4f}')
 
-    model.save_pretrained(save_path + name)
+    model.save_pretrained(save_path)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Sam2 Training Script')

@@ -1,9 +1,10 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file, Response
 from flask_cors import CORS
+import os
 
 import serves
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='templates', static_url_path='')
 CORS(app)
 
 @app.route('/api', methods=['GET'])
@@ -25,68 +26,77 @@ def get_weights():
 
 @app.route('/api/images', methods=['GET'])
 def api_images():
-    image_type = request.args.get('type')
-    return jsonify(serves.get_images(image_type))
+    name = request.args.get('name')
+    return jsonify(serves.get_images(name))
 
-@app.route('/api/images', methods=['POST'])
-def upload_image():
-    file = request.files['file']
-    type = request.form.get('type')
-    return jsonify(serves.upload_image(file, type))
+@app.route('/api/dataset', methods=['POST'])
+def upload_zip():
+    images_zip = request.files['images_zip']
+    annotation_json = request.files['annotation_json']
+    masks_zip = request.files['masks_zip']
+    return jsonify(serves.upload_zip(images_zip, annotation_json, masks_zip))
 
-
-# 7. DELETE /api/images/{img_id} - 删除图片
 @app.route('/api/images/<img_id>', methods=['DELETE'])
-def delete_image(img_id):
-    return jsonify(serves.delete_image(img_id))
+def delete_batch(name):
+    return jsonify(serves.delete_batch(name))
 
-
-# 8. POST /api/predict - 执行缺陷检测
 @app.route('/api/predict', methods=['POST'])
 def predict():
-    return jsonify(serves.predict())
+    data = request.get_json(silent=True)
+    return jsonify(serves.predict(data))
 
-
-# 9. GET /api/tasks/{task_id} - 查询检测任务结果
-@app.route('/api/tasks/<task_id>', methods=['GET'])
+@app.route("/api/task/<task_id>", methods=['GET'])
 def get_task(task_id):
-    return jsonify(serves.get_task(task_id))
+    return Response(serves.event_generator(task_id), mimetype="text/event-stream")
 
-
-# 10. POST /api/train - 启动训练
 @app.route('/api/train', methods=['POST'])
 def train():
-    return jsonify(serves.train())
+    data = request.get_json(silent=True)
+    return jsonify(serves.train(data))
+
+@app.route("/api/export/<task_id>", methods=["GET"])
+def export_task(task_id):
+    try:
+        temp_zip_path = serves.pack_directory_to_temp_zip(task_id)
+    except FileNotFoundError as e:
+        return jsonify({
+            'status': 'error',
+            'timestamp': serves.get_datetime(),
+            'error': repr(e)
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'timestamp': serves.get_datetime(),
+            'error': repr(e)
+        })
 
 
-# 11. GET /api/train/{task_id} - 查询训练进度
-@app.route('/api/train/<task_id>', methods=['GET'])
-def get_train(task_id):
-    return jsonify(serves.get_train(task_id))
+    def generate_and_cleanup():
+        try:
+            with open(temp_zip_path, 'rb') as f:
+                while chunk := f.read(8192):
+                    yield chunk
+        finally:
+            if os.path.exists(temp_zip_path):
+                try:
+                    os.remove(temp_zip_path)
+                except Exception as e:
+                    app.logger.error(f"Cannot delete {temp_zip_path}: {e}")
 
 
-# 12. GET /api/training-history - 获取训练历史
-@app.route('/api/training-history', methods=['GET'])
-def training_history():
-    return jsonify(serves.training_history())
+    return send_file(
+        generate_and_cleanup(), #type: ignore
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=f"task_{task_id}.zip"
+    )
 
-
-# 13. GET /api/export/{task_id} - 导出训练模型文件
-@app.route('/api/export/<task_id>', methods=['GET'])
-def export(task_id):
-    return jsonify(serves.export(task_id))
-
-
-# 14. GET /api/stats - 数据统计
-@app.route('/api/stats', methods=['GET'])
-def stats():
-    return jsonify(serves.stats())
-
-
-# 15. GET /api/files/{filename} - 获取静态文件
-@app.route('/api/files/<path:filename>', methods=['GET'])
-def get_file(filename):
-    return jsonify(serves.get_file(filename))
+@app.route('/')
+def index():
+    # 因为指定了 static_folder，Flask 会在内部处理路径
+    # 使用 send_file 直接发送该目录下的 index.html
+    return send_file(os.path.join(app.static_folder, 'index.html')) #type: ignore
 
 
 # ==================== 启动服务 ====================

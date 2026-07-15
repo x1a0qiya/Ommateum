@@ -38,6 +38,155 @@ def parse_single_label_file(label_file_path):
                     continue
     return label_dict
 
+def predict_and_save_mask_from_yolo(
+    image_path: str,
+    yolo_txt_path: str,
+    model_path: str,
+    lora_path: str = None, #type: ignore
+    output_mask_path: str = "output_masks", 
+    device: str = 'cpu'
+) -> None:
+    """
+    读取 YOLO 格式的标注并配合 SAM 2 预测掩码, 支持[单张图文件模式]和[文件夹批量模式].
+    最终将所有 BBox 预测出的掩码合并保存为单张黑白二值图(0和255).
+    
+    Args:
+        image_path: 输入图像路径 或 images 文件夹路径.
+        yolo_txt_path: YOLO 格式的 .txt 文件路径 或 labels 文件夹路径.
+        model_path: 基础 SAM 2 模型的路径或 Hugging Face 仓库名.
+        lora_path: 保存的 LoRA 适配器目录路径.
+        output_mask_path: 输出黑白掩码图的路径 或 掩码输出保存目录.
+        device: 运行设备 ('cpu' 或 'cuda').
+    """
+    is_batch_mode = os.path.isdir(image_path) and os.path.isdir(yolo_txt_path)
+
+    tasks = []
+    if is_batch_mode:
+        os.makedirs(output_mask_path, exist_ok=True)
+        
+        supported_exts = {'.jpg', '.jpeg', '.png', '.bmp', '.webp', '.JPEG', '.JPG'}
+        all_files = os.listdir(image_path)
+        for f in all_files:
+            stem, ext = os.path.splitext(f)
+            if ext.lower() in supported_exts:
+                img_file_path = os.path.join(image_path, f)
+                txt_file_path = os.path.join(yolo_txt_path, f"{stem}.txt")
+                
+                if os.path.exists(txt_file_path):
+                    out_file_path = os.path.join(output_mask_path, f"{stem}.png")
+                    tasks.append((img_file_path, txt_file_path, out_file_path))
+        
+        if not tasks:
+            print(f"Warning: There is no matched image/label pair in '{image_path}'/'{yolo_txt_path}'")
+            return
+        print(f"Successfully find {len(tasks)} images.")
+    else:
+        tasks.append((image_path, yolo_txt_path, output_mask_path))
+
+    print(f"Load Processor: {model_path}")
+    processor = Sam2Processor.from_pretrained(model_path)
+    
+    print(f"Load Base Model: {model_path}")
+    model = Sam2Model.from_pretrained(model_path)
+    
+    if lora_path and os.path.exists(lora_path):
+        print(f"Loading LoRA: {lora_path}")
+        model = PeftModel.from_pretrained(model, lora_path)
+    elif lora_path:
+        print(f"Warning: There is no available LoRA model in '{lora_path}'. The base model will be run below.")
+            
+    model.to(device)
+    model.eval()
+
+    try:
+        from tqdm import tqdm
+        task_iterator = tqdm(tasks, desc="Processing")
+    except ImportError:
+        task_iterator = tasks
+
+    for curr_img_path, curr_txt_path, curr_out_path in task_iterator:
+        try:
+            raw_image = Image.open(curr_img_path).convert("RGB")
+            img_w, img_h = raw_image.size
+        except Exception as e:
+            print(f"Error: Can't read image {curr_img_path}: {e}")
+            continue
+
+        converted_boxes = []
+        with open(curr_txt_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split()
+                if len(parts) >= 5:
+                    try:
+                        try:
+                            coords = [float(x) for x in parts]
+                            has_img_name = False
+                        except ValueError:
+                            coords = [float(x) for x in parts[1:]]
+                            has_img_name = True
+                        
+                        if len(coords) >= 5:
+                            _, x_center, y_center, norm_w, norm_h = coords[:5]
+                        elif len(coords) == 4 and has_img_name:
+                            x_center, y_center, norm_w, norm_h = coords[:4]
+                        else:
+                            continue
+
+                        xmin = max(0, min(img_w - 1, int((x_center - norm_w / 2.0) * img_w)))
+                        ymin = max(0, min(img_h - 1, int((y_center - norm_h / 2.0) * img_h)))
+                        xmax = max(0, min(img_w - 1, int((x_center + norm_w / 2.0) * img_w)))
+                        ymax = max(0, min(img_h - 1, int((y_center + norm_h / 2.0) * img_h)))
+                        
+                        converted_boxes.append([xmin, ymin, xmax, ymax])
+                    except ValueError:
+                        continue
+
+        if not converted_boxes:
+            if not is_batch_mode:
+                print(f"Warning: There is no available bbox in '{curr_txt_path}'.")
+            continue
+
+        bb_floats = [list(map(float, box)) for box in converted_boxes]
+        input_boxes = [bb_floats]
+        
+        inputs = processor(
+            images=raw_image, 
+            input_boxes=input_boxes, 
+            return_tensors="pt"
+        ).to(device)
+        
+        with torch.no_grad():
+            outputs = model(**inputs, multimask_output=False)
+            
+        masks = processor.image_processor.post_process_masks(
+            outputs.pred_masks.cpu(), 
+            inputs["original_sizes"].cpu()
+        )
+        
+        pred_masks_tensor = masks[0]
+        merged_mask = np.zeros((img_h, img_w), dtype=np.uint8)
+        
+        for idx in range(len(converted_boxes)):
+            binary_mask = pred_masks_tensor[idx][0].numpy() > 0.5
+            
+            if binary_mask.shape != (img_h, img_w):
+                binary_mask = cv2.resize(
+                    binary_mask.astype(np.uint8), 
+                    (img_w, img_h), 
+                    interpolation=cv2.INTER_NEAREST
+                ) > 0
+                
+            merged_mask[binary_mask] = 255
+
+        cv2.imwrite(curr_out_path, merged_mask)
+        if not is_batch_mode:
+            print(f"Successfully predict and save to: {curr_out_path}")
+
+    print("\n END.")
+
 def evaluate_sam2_miou(
     image_dir: str,
     mask_dir: str,
