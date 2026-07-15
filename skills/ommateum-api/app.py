@@ -455,6 +455,20 @@ def predict():
                 })
             except Exception:
                 pass
+            # RAG 读：检索 ChromaDB 中相似的历史缺陷记录
+            try:
+                if _OMMATEUM_AVAILABLE:
+                    _fname = rec["url"].split("/")[-1]
+                    _ftype = rec.get("type", "normal")
+                    _fpath = str((UPLOAD_NORMAL if _ftype == "normal" else UPLOAD_DEFECT) / _fname)
+                    if os.path.exists(_fpath):
+                        _emb = _embed_image_safe(_fpath)
+                        if _emb is not None:
+                            _matches = retrieve_similar(_emb, top_k=3)
+                            if _matches:
+                                results[-1]["rag_similar"] = _matches
+            except Exception:
+                pass
     except Exception as e:
         import traceback as _tb
         print(f"[ERROR] 检测任务 {task_id} 失败: {e}\n{_tb.format_exc()}")
