@@ -352,29 +352,30 @@ const API = (function() {
       config.body = JSON.stringify(config.body);
     }
     const res = await fetch(url, config);
-    if (!res.ok) {
-      const err = new Error(`API ${res.status}: ${res.statusText}`);
-      err.status = res.status;
-      try { err.body = await res.json(); } catch(_) {}
-      throw err;
-    }
     const ct = res.headers.get('content-type') || '';
-    return ct.includes('application/json') ? res.json() : res.text();
+    let body;
+    try { body = ct.includes('json') ? await res.json() : await res.text(); } catch(_) { body = null; }
+    if (!res.ok) {
+      throw new Error((body && body.error) || `HTTP ${res.status}`);
+    }
+    return (body && typeof body === 'object' && body.status === 'ok' && body.data !== undefined) ? body.data : body;
   }
   return {
     health:     () => req('/health'),
     models:     () => req('/models'),
     weights:    (modelId) => req('/weights?model=' + encodeURIComponent(modelId)),
     stats:      () => req('/stats'),
-    images:     (type) => req('/images' + (type ? '?type=' + type : '')),
-    upload:     (formData) => req('/images', { method: 'POST', body: formData }),
-    deleteImg:  (id) => req('/images/' + encodeURIComponent(id), { method: 'DELETE' }),
+    images:     (batchName) => req('/images?name=' + encodeURIComponent(batchName)),
+    datasetUpload: (formData) => req('/dataset', { method: 'POST', body: formData }),
+    deleteBatch: (name) => req('/batches/' + encodeURIComponent(name), { method: 'DELETE' }),
     predict:    (payload) => req('/predict', { method: 'POST', body: payload }),
     task:       (id) => req('/tasks/' + encodeURIComponent(id)),
     train:      (payload) => req('/train', { method: 'POST', body: payload }),
     trainStatus:(id) => req('/train/' + encodeURIComponent(id)),
     trainHistory: () => req('/training-history'),
     exportUrl:  (id) => base + '/export/' + encodeURIComponent(id),
+    errorLogs:  (limit) => req('/logs/errors' + (limit ? '?limit=' + limit : '')),
+    clearErrors: () => req('/logs/errors', { method: 'DELETE' }),
   };
 })();
 
@@ -384,17 +385,17 @@ const state = {
   selectedModel: null,
   weights: [],
   selectedWeight: null,
-  images: [],
-  galleryFilter: 'all',
+  batches: [],
+  selectedBatch: null,
   results: null,
   online: false,
+  datasetFiles: {},
   trainingTaskId: null,
   trainingPollTimer: null,
   trainedHistory: [],
   advParams: {},
-  // Inference page
   infModels: [], infSelectedModel: null, infWeights: [], infSelectedWeight: null,
-  infImages: [], infResults: null,
+  infBatchName: null, infResults: null,
 };
 
 /* ---- DOM helpers ---- */
@@ -464,7 +465,7 @@ async function checkApiStatus() {
 async function loadModels() {
   try {
     const data = await API.models();
-    state.models = data.data?.models || data.models || [];
+    state.models = data.models || [];
     $('#statModels').textContent = state.models.length;
     $('#modelHint').textContent = state.models.length + ' 个可用';
     renderModels();
@@ -516,7 +517,7 @@ async function loadWeights(modelId) {
   $('#weightList').innerHTML = '<div class="weight-empty">加载中…</div>';
   try {
     const data = await API.weights(modelId);
-    state.weights = data.data?.weights || data.weights || [];
+    state.weights = data.models || [];
     $('#weightHint').textContent = state.weights.length + ' 个权重';
     renderWeights();
     if (state.weights.length > 0 && !state.selectedWeight) selectWeight(state.weights[0].id);
@@ -552,150 +553,147 @@ function selectWeight(weightId) {
 /* ---- Ready check ---- */
 function checkReady() {
   const btn = $('#predictBtn');
-  const ready = state.selectedModel && state.selectedWeight && state.images.length > 0 && state.online;
+  const ready = state.selectedModel && state.selectedWeight && state.selectedBatch && state.online;
   btn.disabled = !ready;
 }
 
-/* ---- Upload ---- */
-function setupUpload(zoneId, inputId, type) {
-  const zone = $('#' + zoneId); const input = $('#' + inputId);
-  zone.addEventListener('click', () => input.click());
-  input.addEventListener('change', () => { if (input.files.length) handleFiles(input.files, type); input.value = ''; });
-  ['dragenter','dragover'].forEach(ev => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add('dragover'); }));
-  ['dragleave','drop'].forEach(ev => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.remove('dragover'); }));
-  zone.addEventListener('drop', (e) => { if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files, type); });
+/* ---- Dataset Upload (batch zip) ---- */
+function setupDatasetUpload() {
+  const zones = [{zoneId:'zoneDatasetImages',inputId:'inputDatasetImages',key:'images_zip'},
+                 {zoneId:'zoneDatasetAnno',inputId:'inputDatasetAnno',key:'annotation_json'},
+                 {zoneId:'zoneDatasetMasks',inputId:'inputDatasetMasks',key:'masks_zip'}];
+  state.datasetFiles = {};
+  zones.forEach(({zoneId,inputId,key}) => {
+    const zone = $('#'+zoneId), input = $('#'+inputId);
+    zone.addEventListener('click',() => input.click());
+    input.addEventListener('change',() => {
+      if(input.files.length){ state.datasetFiles[key]=input.files[0]; zone.classList.add('has-file');
+        var n=input.files[0].name; zone.querySelector('.uz-sub').textContent = n.length>28?n.slice(0,25)+'…':n; }
+      input.value=''; $('#uploadDatasetBtn').disabled=!state.datasetFiles['images_zip'];
+    });
+    ['dragenter','dragover'].forEach(ev => zone.addEventListener(ev, e => e.preventDefault()));
+    ['dragleave','drop'].forEach(ev => zone.addEventListener(ev, e => e.preventDefault()));
+  });
+  $('#uploadDatasetBtn').addEventListener('click', handleDatasetUpload);
 }
-async function handleFiles(files, type) {
-  const imgFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
-  if (imgFiles.length === 0) { toast('请选择图片文件', 'error'); return; }
-  for (const file of imgFiles) {
-    const fd = new FormData();
-    fd.append('file', file); fd.append('type', type);
-    if (state.selectedModel) fd.append('model', state.selectedModel);
-    if (state.selectedWeight) fd.append('weight', state.selectedWeight);
-    try { const result = await API.upload(fd); state.images.push(result.data?.image || result.image || result); }
-    catch (e) { toast(`上传失败：${file.name} — ${e.message}`, 'error'); }
-  }
-  toast(`成功上传 ${imgFiles.length} 张${type === 'normal' ? '正确' : '缺陷'}图片`, 'success');
-  renderGallery(); updateStats(); updateTrainSummary(); checkReady();
+async function handleDatasetUpload() {
+  const z = state.datasetFiles['images_zip']; if(!z){toast('请选择图片压缩包','error');return;}
+  const fd = new FormData(); fd.append('images_zip',z);
+  if(state.datasetFiles['annotation_json']) fd.append('annotation_json',state.datasetFiles['annotation_json']);
+  if(state.datasetFiles['masks_zip']) fd.append('masks_zip',state.datasetFiles['masks_zip']);
+  $('#uploadDatasetBtn').disabled=true; $('#uploadDatasetBtn').textContent='上传中…';
+  try {
+    const result = await API.datasetUpload(fd);
+    const info = { batch_id: result.batch_id||'batch_'+Date.now().toString(36),
+      uploaded_at: result.uploaded_at||new Date().toISOString(),
+      images_file: result.images_file||{name:z.name,size_kb:Math.round(z.size/1024)},
+      annotation_file: result.annotation_file, masks_file: result.masks_file||null };
+    state.batches.unshift(info); state.selectedBatch=info.batch_id;
+    toast('数据集上传成功！批次: '+state.selectedBatch,'success');
+    state.datasetFiles={};
+    document.querySelectorAll('.upload-zone.has-file').forEach(zp => {
+      zp.classList.remove('has-file');
+      var k=zp.id==='zoneDatasetImages'?'images_zip':zp.id==='zoneDatasetAnno'?'annotation_json':'masks_zip';
+      var sp=zp.querySelector('.uz-sub');
+      var texts={images_zip:'上传正常样本图片压缩包<span class="pill">必选 · ZIP</span>',
+                  annotation_json:'上传标注 JSON（可选）<span class="pill" style="background:rgba(139,92,246,0.15);color:#7c3aed;">可选 · JSON</span>',
+                  masks_zip:'上传掩码图压缩包（可选）<span class="pill" style="background:rgba(16,185,129,0.15);color:#059669;">可选 · ZIP</span>'};
+      if(sp) sp.innerHTML = texts[k]||'';
+    });
+    renderDatasetList(); await refreshBatches(); checkReady(); updateTrainSummary(); updateStats();
+  } catch(e) { toast('上传失败：'+e.message,'error'); }
+  finally { $('#uploadDatasetBtn').disabled=false; $('#uploadDatasetBtn').textContent='上传数据集'; }
+}
+async function refreshBatches() {
+  try {
+    var sel=document.getElementById('infBatchSelect'); if(!sel) return;
+    sel.innerHTML='<option value="">— 选择已有批次 —</option>';
+    state.batches.forEach(b=>{
+      var o=document.createElement('option');
+      o.value=b.batch_id; o.textContent=b.batch_id;
+      sel.appendChild(o);
+    });
+  } catch(e){}
 }
 
-/* ---- Gallery ---- */
-function renderGallery() {
-  const gallery = $('#gallery'); gallery.innerHTML = '';
-  const filtered = state.galleryFilter === 'all' ? state.images : state.images.filter(i => i.type === state.galleryFilter);
-  $('#cntAll').textContent = state.images.length;
-  $('#cntNormalTab').textContent = state.images.filter(i => i.type === 'normal').length;
-  $('#cntDefectTab').textContent = state.images.filter(i => i.type === 'defect').length;
-  if (filtered.length === 0) { gallery.innerHTML = '<div class="gallery-empty">该分类下暂无样本</div>'; return; }
-  filtered.forEach((img) => {
-    const wrap = el('div', 't-tilt');
-    const card = el('div', 'img-card t-tilt-card');
-    const isDefect = img.type === 'defect';
-    let resultBadge = '';
-    if (img.result) {
-      const v = img.result;
-      if (v.verdict === 'defect') resultBadge = `<div class="img-result ${v.severity === 'critical' ? 'crit' : 'warn'}">缺陷 ${(v.confidence*100).toFixed(0)}%</div>`;
-      else resultBadge = `<div class="img-result ok">正常 ${(v.confidence*100).toFixed(0)}%</div>`;
-    }
-    const confText = img.result ? (img.result.confidence*100).toFixed(1)+'%' : img.size_kb ? img.size_kb+'KB' : '';
-    const confClass = img.result ? (img.result.confidence > 0.85 ? 'high' : 'mid') : '';
-    card.innerHTML = `
-      <div class="img-thumb">
-        ${img.url ? `<img src="${img.url}" alt="${img.name}" loading="lazy">` : `<span class="placeholder">${img.name}</span>`}
-        <span class="img-badge ${img.type}">${isDefect ? '缺陷' : '正常'}</span>
-        ${resultBadge}
-        <div class="img-del" title="删除"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></div>
-      </div>
-      <div class="img-meta"><span>${img.name && img.name.length > 16 ? img.name.slice(0,14)+'…' : (img.name||'')}</span><span class="conf ${confClass}">${confText}</span></div>`;
-    card.querySelector('.img-del').addEventListener('click', async (e) => { e.stopPropagation(); await deleteImage(img.id); });
-    wrap.appendChild(card); gallery.appendChild(wrap); makeTilt(wrap);
+/* ---- Dataset List ---- */
+function renderDatasetList() {
+  const list = $('#datasetList'); if(!list)return;
+  if(state.batches.length===0){list.innerHTML='<div class="gallery-empty">尚未上传数据集</div>';return;}
+  list.innerHTML='';
+  state.batches.forEach(b => {
+    const card = el('div','dataset-card'+(b.batch_id===state.selectedBatch?' active-batch':''));
+    var time=b.uploaded_at?new Date(b.uploaded_at).toLocaleString('zh-CN'):'';
+    var filesHtml='';
+    var addFile=(icon,name,sz,cls)=>{
+      var svg=icon==='zip'?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
+      var szText=sz?((sz/1024)>1?(sz/1024).toFixed(1)+' MB':sz+' KB'):'';
+      filesHtml+='<div class="dc-file"><div class="dc-fi '+cls+'">'+svg+'</div><span class="dc-fn">'+(name||'')+'</span><span class="dc-fm">'+szText+'</span></div>';
+    };
+    if(b.images_file)addFile('zip',b.images_file.name,b.images_file.size_kb,'zip');
+    if(b.annotation_file)addFile('json',b.annotation_file.name,b.annotation_file.size_kb,'json');
+    if(b.masks_file)addFile('zip',b.masks_file.name,b.masks_file.size_kb,'mask');
+    card.innerHTML='<div class="dc-header"><span class="dc-batch">'+b.batch_id+'</span><span class="dc-time">'+time+'</span><button class="dc-del" title="删除批次"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></div><div class="dc-files">'+filesHtml+'</div>';
+    card.querySelector('.dc-header').addEventListener('click',(e)=>{
+      if(e.target.closest('.dc-del'))return;
+      state.selectedBatch=b.batch_id;
+      document.querySelectorAll('.dataset-card').forEach(c=>c.classList.remove('active-batch'));
+      card.classList.add('active-batch');
+      checkReady(); updateTrainSummary(); updateStats();
+      toast('已选择批次: '+b.batch_id,'info');
+    });
+    card.querySelector('.dc-del').addEventListener('click',(e)=>{e.stopPropagation();deleteBatch(b.batch_id);});
+    if(b.batch_id===state.selectedBatch) card.classList.add('active-batch');
+    list.appendChild(card);
   });
 }
-async function deleteImage(id) {
-  const prev = [...state.images];
-  state.images = state.images.filter(i => i.id !== id);
-  renderGallery(); updateStats(); updateTrainSummary(); checkReady();
-  try { await API.deleteImg(id); toast('已删除图片', 'info'); }
-  catch (e) { state.images = prev; renderGallery(); updateStats(); updateTrainSummary(); checkReady(); toast('删除失败：' + e.message, 'error'); }
-}
-function setupGalleryTabs() {
-  $$('.gtab').forEach(tab => tab.addEventListener('click', () => {
-    $$('.gtab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active'); state.galleryFilter = tab.dataset.filter; renderGallery();
-  }));
-}
-
-/* ---- Stats ---- */
 async function updateStats() {
-  const normalCount = state.images.filter(i => i.type === 'normal').length;
-  const defectCount = state.images.filter(i => i.type === 'defect').length;
-  $('#statNormal').textContent = normalCount;
-  $('#statDefect').textContent = defectCount;
-  if (state.results && state.results.length > 0) {
-    const correct = state.results.filter(r => r.expected_verdict === r.verdict).length;
-    $('#statAccuracy').textContent = (correct / state.results.length * 100).toFixed(1) + '%';
+  $('#statNormal').textContent = state.batches.length;
+  $('#statDefect').textContent = state.batches.length > 0 ? state.batches.length : 0;
+  if(state.results&&state.results.length>0){
+    var c=state.results.filter(r=>r.expected_verdict===r.verdict).length;
+    $('#statAccuracy').textContent=(c/state.results.length*100).toFixed(1)+'%';
   }
 }
-
-/* ---- Predict ---- */
+async function deleteBatch(batchId) {
+  var prev=[...state.batches];
+  state.batches=state.batches.filter(b=>b.batch_id!==batchId);
+  if(state.selectedBatch===batchId) state.selectedBatch=state.batches.length>0?state.batches[0].batch_id:null;
+  renderDatasetList(); updateStats(); updateTrainSummary(); checkReady(); refreshBatches();
+  try { await API.deleteBatch(batchId); toast('已删除批次', 'info'); }
+  catch(e) { state.batches=prev; state.selectedBatch=state.batches.length>0?state.batches[0].batch_id:null; renderDatasetList(); updateStats(); updateTrainSummary(); checkReady(); refreshBatches(); toast('删除失败：'+e.message,'error'); }
+}
 async function runPredict() {
-  if (!state.selectedModel || !state.selectedWeight) { toast('请先选择模型和权重', 'error'); return; }
-  if (state.images.length === 0) { toast('请先上传样本图片', 'error'); return; }
-  const overlay = $('#scanOverlay');
-  const modelObj = state.models.find(m => m.id === state.selectedModel);
-  const weightObj = state.weights.find(w => w.id === state.selectedWeight);
-  $('#scanLabel').textContent = '正在执行缺陷检测…';
-  $('#scanSub').textContent = `model: ${modelObj ? modelObj.name : state.selectedModel} · weight: ${weightObj ? weightObj.name : state.selectedWeight}`;
-  overlay.classList.add('show');
-  try {
-    const payload = { model: state.selectedModel, weight: state.selectedWeight, image_ids: state.images.map(i => i.id) };
-    const taskData = await API.predict(payload);
-    const d = taskData.data || taskData;
-    let result = d;
-    if (taskData.task_id && taskData.status !== 'done' && taskData.status !== 'completed') {
-      const polled = await pollTask(taskData.task_id);
-      result = polled.data || polled;
-    }
-    state.results = result.results || [];
-    if (state.results && state.results.length) {
-      const resultMap = {}; state.results.forEach(r => { resultMap[r.image_id] = r; });
-      state.images.forEach(img => { if (resultMap[img.id]) img.result = resultMap[img.id]; });
-    }
-    renderResults(); renderGallery(); updateStats();
-    toast(`检测完成，共 ${state.results.length} 项结果`, 'success');
-  } catch (e) { toast('检测失败：' + e.message, 'error'); }
-  finally { overlay.classList.remove('show'); }
+  if(!state.selectedModel||!state.selectedWeight){toast('请先选择模型和权重','error');return;}
+  if(!state.selectedBatch){toast('请先上传数据集并选择批次','error');return;}
+  const overlay=$('#scanOverlay'); $('#scanLabel').textContent='正在执行缺陷检测…'; $('#scanSub').textContent='批次: '+state.selectedBatch; overlay.classList.add('show');
+  try{
+    var result=await API.predict({model:state.selectedModel,weight:state.selectedWeight,batch_name:state.selectedBatch});
+    if(result.task_id&&result.status!=='done')result=await pollTask(result.task_id)||result;
+    state.results=result.results||[];
+    renderDatasetList(); updateStats();
+    toast('检测完成，共 '+(state.results?state.results.length:0)+' 项结果','success');
+  }catch(e){toast('检测失败：'+e.message,'error');}
+  finally{overlay.classList.remove('show');}
 }
-async function pollTask(taskId) {
-  for (let i = 0; i < 60; i++) {
-    await new Promise(r => setTimeout(r, 1000));
-    const t = await API.task(taskId);
-    if (t.status === 'done' || t.status === 'completed' || t.status === 'success') return t;
-    if (t.status === 'failed' || t.status === 'error') throw new Error(t.error || '检测任务失败');
-    $('#scanLabel').textContent = '检测中… ' + Math.round((i+1)/60*100) + '%';
-  }
+async function pollTask(taskId){
+  for(var i=0;i<60;i++){await new Promise(r=>setTimeout(r,1000));var t=await API.task(taskId);if(t.status==='done'||t.status==='completed')return t;if(t.status==='failed'||t.status==='error')throw new Error(t.error||'检测任务失败');$('#scanLabel').textContent='检测中… '+Math.round((i+1)/60*100)+'%';}
   throw new Error('检测超时');
 }
 
-/* ---- Results ---- */
+/* ---- Results (workspace: condensed toast summary) ---- */
 function renderResults() {
-  const body = $('#resultsBody'); body.innerHTML = '';
-  if (!state.results || state.results.length === 0) { body.innerHTML = '<div class="results-empty"><div>未获取到检测结果</div></div>'; return; }
-  state.results.forEach((r) => {
-    const row = el('div', 'result-row');
-    const verdict = r.verdict || 'normal';
-    const conf = r.confidence || 0;
-    const sevClass = r.severity === 'critical' ? 'crit' : verdict === 'defect' ? 'warn' : 'ok';
-    const vTag = verdict === 'defect' ? (r.severity === 'critical' ? '严重缺陷' : '缺陷') : '正常';
-    const confPct = (conf * 100).toFixed(1);
-    const img = state.images.find(i => i.id === r.image_id);
-    row.innerHTML = `
-      <div class="result-thumb">${img && img.url ? `<img src="${img.url}" alt="">` : ''}</div>
-      <div class="result-info"><div class="ri-name">${r.image_name || (img ? img.name : r.image_id)}${r.rag_similar ? `<span class="rag-badge" title="ChromaDB 中检索到 ${r.rag_similar.length} 条相似历史记录">RAG ${r.rag_similar.length}</span>` : ''}</div><div class="ri-detail">${r.defect_type ? '类型: ' + r.defect_type + ' · ' : ''}置信度 ${confPct}%${r.processing_ms ? ' · ' + r.processing_ms + 'ms' : ''}</div></div>
-      <div class="result-verdict"><div class="conf-bar"><div class="fill ${sevClass}" style="width:${confPct}%"></div></div><span class="verdict-tag ${sevClass}">${vTag}</span></div>`;
-    body.appendChild(row);
-  });
+  if(!state.results||state.results.length===0) return;
+  var nd=state.results.filter(r=>r.verdict==='defect').length,nn=state.results.length-nd;
+  var c=state.results.filter(r=>r.expected_verdict===r.verdict).length;
+  var acc=state.results.length>0?(c/state.results.length*100).toFixed(1):'—';
+  toast('检测结果: 共 '+state.results.length+' 张 · 缺陷 '+nd+' 张 · 准确率 '+acc+'%','info');
+}
+function exportResults(){
+  if(!state.results||state.results.length===0){toast('没有可导出的结果','error');return;}
+  var rpt={exported_at:new Date().toISOString(),model:state.selectedModel,weight:state.selectedWeight,batch:state.selectedBatch,summary:{total:state.results.length,defect_count:state.results.filter(r=>r.verdict==='defect').length,normal_count:state.results.filter(r=>r.verdict==='normal').length,accuracy:state.results.length>0?state.results.filter(r=>r.expected_verdict===r.verdict).length/state.results.length:0},results:state.results};
+  var blob=new Blob([JSON.stringify(rpt,null,2)],{type:'application/json'});
+  var url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='detect_results_'+state.selectedBatch+'.json';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);toast('结果已导出','success');
 }
 
 /* ============================================================
@@ -800,16 +798,14 @@ function closeAdvModal() {
 }
 
 function updateTrainSummary() {
-  const n = state.images.filter(i => i.type === 'normal').length;
-  const d = state.images.filter(i => i.type === 'defect').length;
-  $('#tdsNormal').textContent = n + ' 张';
-  $('#tdsDefect').textContent = d + ' 张';
-  $('#tdsTotal').textContent = (n + d) + ' 张';
-  const yoloEpochs = state.advParams.yolo_epochs || _TRAIN_DEFAULTS.yolo_epochs;
-  const sam2Epochs = state.advParams.sam2_epochs || _TRAIN_DEFAULTS.sam2_epochs;
-  $('#tdsEstimate').textContent = '~' + (yoloEpochs * 0.4 + sam2Epochs * 0.4).toFixed(1) + 's';
-  const hasData = (n + d) > 0;
-  $('#trainBtn').disabled = !hasData || !state.online || !!state.trainingTaskId;
+  var cur=state.batches.find(b=>b.batch_id===state.selectedBatch);
+  var imgCount=cur&&cur.images_file?cur.images_file.image_count:'—';
+  var maskCount=cur&&cur.masks_file?cur.masks_file.mask_count:'—';
+  var hasAnno=cur&&cur.annotation_file?'有':'无';
+  $('#tdsNormal').textContent='图片: '+imgCount+' 张'; $('#tdsDefect').textContent='标注: '+hasAnno;
+  $('#tdsTotal').textContent=state.selectedBatch?'批次: '+state.selectedBatch:'—';
+  $('#tdsEstimate').textContent=cur&&cur.masks_file?'含Mask: '+maskCount+' 张':'—';
+  $('#trainBtn').disabled=!state.selectedBatch||!state.online||!!state.trainingTaskId;
   const changed = Object.keys(state.advParams).length > 0;
   $('#advHint').textContent = changed ? `已自定义 ${Object.keys(state.advParams).length} 项参数` : '默认参数 · 点击可修改';
 }
@@ -829,11 +825,8 @@ function setupTrainingControls() {
 }
 
 async function startTraining() {
-  const normalIds = state.images.filter(i => i.type === 'normal').map(i => i.id);
-  const defectIds = state.images.filter(i => i.type === 'defect').map(i => i.id);
-  if (normalIds.length === 0 && defectIds.length === 0) { toast('请先上传训练图片', 'error'); return; }
-
-  $('#trainBtn').disabled = true;
+  if(!state.selectedBatch){toast('请先上传数据集并选择批次','error');return;}
+  $('#trainBtn').disabled=true;
   $('#trainProgress').classList.add('show');
   $('#tpTotalEpoch').textContent = state.advParams.yolo_epochs || _TRAIN_DEFAULTS.yolo_epochs;
   $('#tpEpoch').textContent = '0';
@@ -845,13 +838,7 @@ async function startTraining() {
   $('#tpStage').textContent = '准备中';
 
   try {
-    const payload = {
-      params: state.advParams,
-      normal_image_ids: normalIds,
-      defect_image_ids: defectIds,
-    };
-    const data = await API.train(payload);
-    const d = data.data || data;
+    const d = await API.train({params:state.advParams,batch_name:state.selectedBatch});
     state.trainingTaskId = d.task_id;
     toast('训练已启动，预计 ' + d.estimated_seconds + 's', 'info');
     pollTraining(d.task_id);
@@ -967,7 +954,7 @@ async function useTrainedModel(modelId, weightId) {
 async function loadInfModels() {
   try {
     const data = await API.models();
-    state.infModels = data.data?.models || data.models || [];
+    state.infModels = data.models || [];
     renderInfModels();
   } catch (e) { toast('模型列表加载失败', 'error'); }
 }
@@ -990,7 +977,7 @@ async function loadInfWeights(modelId) {
   $('#infWeightHint').textContent = '加载中…';
   try {
     const data = await API.weights(modelId);
-    state.infWeights = data.data?.weights || data.weights || [];
+    state.infWeights = data.models || [];
     renderInfWeights();
     if (state.infWeights.length > 0 && !state.infSelectedWeight) selectInfWeight(state.infWeights[0].id);
   } catch (e) { toast('权重加载失败', 'error'); }
@@ -1010,65 +997,41 @@ function selectInfWeight(wid) {
   state.infSelectedWeight = wid; renderInfWeights(); infCheckReady();
 }
 function infCheckReady() {
-  $('#infPredictBtn').disabled = !(state.infSelectedModel && state.infSelectedWeight && state.infImages.length > 0 && state.online);
+  $('#infPredictBtn').disabled = !(state.infSelectedModel && state.infSelectedWeight && state.infBatchName && state.online);
 }
 
 /* Inference upload */
-function setupInfUpload() {
-  const zone = $('#zoneInference'); const input = $('#inputInference');
-  zone.addEventListener('click', () => input.click());
-  input.addEventListener('change', () => { if (input.files.length) handleInfFiles(input.files); input.value = ''; });
-  ['dragenter','dragover'].forEach(ev => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add('dragover'); }));
-  ['dragleave','drop'].forEach(ev => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.remove('dragover'); }));
-  zone.addEventListener('drop', (e) => { if (e.dataTransfer.files.length) handleInfFiles(e.dataTransfer.files); });
+function setupInfBatch() {
+  var sel=$('#infBatchSelect'),inp=$('#infBatchInput');
+  sel.addEventListener('change',()=>{state.infBatchName=sel.value||null;if(sel.value)inp.value=sel.value;infCheckReady();});
+  inp.addEventListener('input',()=>{state.infBatchName=inp.value.trim()||null;if(state.infBatchName)sel.value='';infCheckReady();});
 }
-async function handleInfFiles(files) {
-  const imgFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
-  if (imgFiles.length === 0) { toast('请选择图片文件', 'error'); return; }
-  for (const file of imgFiles) {
-    const fd = new FormData(); fd.append('file', file); fd.append('type', 'normal');
-    try {
-      const resp = await API.upload(fd);
-      const img = resp.data?.image || resp.image || resp;
-      state.infImages.push(img);
-    } catch (e) { toast(`上传失败: ${file.name}`, 'error'); }
-  }
-  toast(`成功上传 ${imgFiles.length} 张图片`, 'success');
-  infCheckReady();
-}
-
-/* Inference predict */
 async function runInfPredict() {
-  if (!state.infSelectedModel || !state.infSelectedWeight) { toast('请先选择模型和权重', 'error'); return; }
-  if (state.infImages.length === 0) { toast('请先上传待检测图片', 'error'); return; }
-  const overlay = $('#scanOverlay');
-  $('#scanLabel').textContent = '正在执行缺陷检测…';
-  overlay.classList.add('show');
-  try {
-    const payload = { model: state.infSelectedModel, weight: state.infSelectedWeight, image_ids: state.infImages.map(i => i.id) };
-    const resp = await API.predict(payload);
-    const task = resp.data || resp;
-    state.infResults = task.results || [];
-    renderInfResults();
-    toast(`检测完成，共 ${state.infResults.length} 项结果`, 'success');
-  } catch (e) { toast('检测失败: ' + e.message, 'error'); }
-  finally { overlay.classList.remove('show'); }
+  if(!state.infSelectedModel||!state.infSelectedWeight){toast('请先选择模型和权重','error');return;}
+  if(!state.infBatchName){toast('请选择或输入数据批次','error');return;}
+  const overlay=$('#scanOverlay');$('#scanLabel').textContent='正在执行缺陷检测…';overlay.classList.add('show');
+  try{
+    var task=await API.predict({model:state.infSelectedModel,weight:state.infSelectedWeight,batch_name:state.infBatchName});
+    state.infResults=task.results||[];renderInfResults();toast('检测完成，共 '+state.infResults.length+' 项结果','success');
+  }catch(e){toast('检测失败: '+e.message,'error');}
+  finally{overlay.classList.remove('show');}
 }
 function renderInfResults() {
-  const body = $('#infResultsBody'); body.innerHTML = '';
-  if (!state.infResults || state.infResults.length === 0) { body.innerHTML = '<div class="results-empty"><div>未获取到检测结果</div></div>'; return; }
-  state.infResults.forEach((r) => {
-    const row = el('div', 'result-row');
-    const verdict = r.verdict || 'normal';
-    const conf = r.confidence || 0;
-    const sevClass = r.severity === 'critical' ? 'crit' : verdict === 'defect' ? 'warn' : 'ok';
-    const vTag = verdict === 'defect' ? (r.severity === 'critical' ? '严重缺陷' : '缺陷') : '正常';
-    const img = state.infImages.find(i => i.id === r.image_id);
-    row.innerHTML = `
-      <div class="result-thumb">${img && img.url ? `<img src="${img.url}" alt="">` : ''}</div>
-      <div class="result-info"><div class="ri-name">${r.image_name || (img ? img.name : '')}${r.rag_similar ? `<span class="rag-badge" title="ChromaDB 中检索到 ${r.rag_similar.length} 条相似历史记录">RAG ${r.rag_similar.length}</span>` : ''}</div><div class="ri-detail">${r.defect_type ? '类型: '+r.defect_type+' · ' : ''}置信度 ${(conf*100).toFixed(1)}%</div></div>
-      <div class="result-verdict"><div class="conf-bar"><div class="fill ${sevClass}" style="width:${(conf*100).toFixed(1)}%"></div></div><span class="verdict-tag ${sevClass}">${vTag}</span></div>`;
-    body.appendChild(row);
+  var tb=$('#infResultsToolbar'),empty=$('#infResultsEmpty'),list=$('#infResultsList');list.innerHTML='';
+  if(!state.infResults||state.infResults.length===0){if(tb)tb.style.display='none';if(empty)empty.style.display='';return;}
+  if(tb)tb.style.display='flex';if(empty)empty.style.display='none';
+  var nd=state.infResults.filter(r=>r.verdict==='defect').length,nn=state.infResults.length-nd;
+  var s=$('#infRtSummary');if(s)s.innerHTML='<span>共 <strong>'+state.infResults.length+'</strong> 张 · 缺陷 <strong style="color:var(--defect-dark)">'+nd+'</strong> 张 · 正常 <strong style="color:var(--normal-dark)">'+nn+'</strong> 张</span>';
+  var eb=$('#infExportResultsBtn');if(eb)eb.onclick=()=>{
+    var rpt={exported_at:new Date().toISOString(),model:state.infSelectedModel,weight:state.infSelectedWeight,batch:state.infBatchName,summary:{total:state.infResults.length,defect_count:nd,normal_count:nn},results:state.infResults};
+    var blob=new Blob([JSON.stringify(rpt,null,2)],{type:'application/json'});
+    var url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='detect_results_'+state.infBatchName+'.json';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);toast('结果已导出','success');
+  };
+  state.infResults.forEach(r=>{
+    var row=el('div','result-row'),v=r.verdict||'normal',conf=r.confidence||0,sc=v==='critical'?'crit':v==='defect'?'warn':'ok';
+    var vTag=v==='defect'?(r.severity==='critical'?'严重缺陷':'缺陷'):'正常',cp=(conf*100).toFixed(1);
+    row.innerHTML='<div class="result-thumb">'+(r.image_name?`<div class="thumb-name">${r.image_name.slice(0,2)}</div>`:'')+'</div><div class="result-info"><div class="ri-name">'+(r.image_name||'')+(r.rag_similar?`<span class="rag-badge" title="ChromaDB 中检索到 '+r.rag_similar.length+' 条相似历史记录">RAG '+r.rag_similar.length+'</span>`:'')+'</div><div class="ri-detail">'+(r.defect_type?'类型: '+r.defect_type+' · ':'')+'置信度 '+cp+'%</div></div><div class="result-verdict"><div class="conf-bar"><div class="fill '+sc+'" style="width:'+cp+'%"></div></div><span class="verdict-tag '+sc+'">'+vTag+'</span></div>';
+    list.appendChild(row);
   });
 }
 
@@ -1081,6 +1044,81 @@ async function loadStats() {
     }
     if (data.trained_weights != null) $('#statTrained').textContent = data.trained_weights;
   } catch (e) { /* silent */ }
+}
+
+/* ---- Error log viewer ---- */
+async function loadErrors() {
+  try {
+    var data = await API.errorLogs(50);
+    var errors = data.errors || [];
+    var el = $('#errIndicator');
+    if (errors.length > 0) {
+      el.style.display = 'flex';
+      $('#errCount').textContent = errors.length > 99 ? '99+' : errors.length;
+    } else {
+      el.style.display = 'none';
+    }
+  } catch (e) { /* silent */ }
+}
+
+function renderErrorModal() {
+  API.errorLogs(50).then(function (data) {
+    var errors = data.errors || [];
+    var body = $('#errModalBody');
+    $('#errModalTotal').textContent = '共 ' + data.total + ' 条';
+
+    if (errors.length === 0) {
+      body.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-3);">暂无错误记录</div>';
+      return;
+    }
+
+    var html = '<table class="err-table"><thead><tr><th>时间</th><th>类型</th><th>错误信息</th><th>端点</th><th>Traceback</th></tr></thead><tbody>';
+    errors.forEach(function (e) {
+      var ts = e.timestamp ? new Date(e.timestamp).toLocaleString('zh-CN') : '—';
+      var tb = e.traceback && e.traceback.length > 0 ? e.traceback.slice(-2).join('\n') : '';
+      html += '<tr>' +
+        '<td class="err-ts">' + ts + '</td>' +
+        '<td class="err-type">' + (e.error_type || '—') + '</td>' +
+        '<td class="err-msg" title="' + (e.error_message || '').replace(/"/g, '&quot;') + '">' + (e.error_message || '—') + '</td>' +
+        '<td class="err-ts">' + (e.method || '') + ' ' + (e.endpoint || '—') + '</td>' +
+        '<td class="err-tb" title="' + tb.replace(/"/g, '&quot;') + '">' + (tb ? tb.replace(/\n/g, ' › ') : '—') + '</td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+    body.innerHTML = html;
+  }).catch(function () {
+    $('#errModalBody').innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-3);">加载失败</div>';
+  });
+}
+
+function setupErrorModal() {
+  $('#errIndicator').addEventListener('click', function () { openErrModal(); });
+  $('#errClose').addEventListener('click', closeErrModal);
+  $('#errModal').addEventListener('click', function (e) { if (e.target === $('#errModal')) closeErrModal(); });
+  $('#errClearBtn').addEventListener('click', function () {
+    API.clearErrors().then(function () {
+      renderErrorModal();
+      loadErrors();
+      toast('错误日志已清空', 'success');
+    }).catch(function () { toast('清空失败', 'error'); });
+  });
+}
+
+function openErrModal() {
+  var m = $('#errModal');
+  m.style.display = 'flex';
+  var modal = m.querySelector('.t-modal');
+  modal.classList.remove('is-closing');
+  requestAnimationFrame(function () { modal.classList.add('is-open'); });
+  renderErrorModal();
+}
+function closeErrModal() {
+  var m = $('#errModal');
+  var modal = m.querySelector('.t-modal');
+  var closeMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur')) || 150;
+  modal.classList.remove('is-open');
+  modal.classList.add('is-closing');
+  setTimeout(function () { modal.classList.remove('is-closing'); m.style.display = 'none'; }, closeMs);
 }
 
 /* ---- Scroll reveal ---- */
@@ -1227,16 +1265,13 @@ function startTypewriter() {
 
 /* ---- Init ---- */
 async function init() {
-  setupUpload('zoneNormal', 'inputNormal', 'normal');
-  setupUpload('zoneDefect', 'inputDefect', 'defect');
-  setupGalleryTabs();
+  setupDatasetUpload();
   setupTrainingControls();
   setupReveal();
   setupMultiScreenScroll();
+  setupErrorModal();
   $('#predictBtn').addEventListener('click', runPredict);
-
-  // Inference page setup
-  setupInfUpload();
+  setupInfBatch();
   $('#infPredictBtn').addEventListener('click', runInfPredict);
 
   // 入场动画结束后启动打字机效果
@@ -1244,7 +1279,9 @@ async function init() {
 
   const online = await checkApiStatus();
   if (online) {
-    await Promise.all([loadModels(), refreshImages(), loadTrainingHistory(), loadStats(), loadInfModels()]);
+    await Promise.all([loadModels(), loadTrainingHistory(), loadStats(), loadInfModels()]);
+    refreshDatasets();
+    loadErrors();
   } else {
     toast('API 后端未连接，请启动后端服务', 'error');
     $('#modelHint').textContent = '离线';
@@ -1252,6 +1289,7 @@ async function init() {
   checkReady();
   updateTrainSummary();
   setInterval(checkApiStatus, 30000);
+  setInterval(loadErrors, 45000);
   setupClickBlur();
 }
 
@@ -1263,7 +1301,7 @@ function setupClickBlur() {
   document.addEventListener('click', (e) => {
     // 忽略纯文本无交互元素的点击
     const tag = e.target.tagName;
-    if (tag === 'BODY' || tag === 'HTML' || tag === 'DIV' && !e.target.closest('.panel, button, .model-card, .weight-item, .upload-zone, .gtab, .img-card, .scroll-cue, .github-link')) return;
+    if (tag === 'BODY' || tag === 'HTML' || tag === 'DIV' && !e.target.closest('.panel, button, .model-card, .weight-item, .upload-zone, .dataset-card, .field, .scroll-cue, .github-link')) return;
     // 清除之前的定时器 / class
     if (timer) clearTimeout(timer);
     bg.classList.remove('click-blur-return');
@@ -1279,11 +1317,9 @@ function setupClickBlur() {
   });
 }
 
-async function refreshImages() {
+async function refreshDatasets() {
   try {
-    const data = await API.images();
-    state.images = data.data?.images || data.images || [];
-    renderGallery(); updateStats(); updateTrainSummary(); checkReady();
+    renderDatasetList(); updateStats(); updateTrainSummary(); checkReady(); refreshBatches();
   } catch (e) { /* silent */ }
 }
 

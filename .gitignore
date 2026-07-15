@@ -15,6 +15,9 @@ runs/
 #train log
 train_log.txt
 
+# API runtime logs (app.log / error.log / errors.json)
+logs/
+
 #outputs
 outputs/
 

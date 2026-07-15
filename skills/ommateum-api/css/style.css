@@ -297,6 +297,29 @@ body.scrolled .topbar { transform: translateY(-100%); opacity: 0; pointer-events
 .api-status.online .dot { background: var(--normal); box-shadow: 0 0 0 3px var(--normal-soft); }
 .api-status.offline .dot { background: var(--severe); }
 
+/* ---- Error indicator (topbar) ---- */
+.err-indicator {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 999px;
+  background: var(--severe-soft); border: 1px solid rgba(239,68,68,0.3);
+  font-size: 12px; font-family: ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, monospace;
+  color: var(--severe); cursor: pointer;
+  transition: all var(--dur) var(--ease);
+}
+.err-indicator:hover { background: rgba(239,68,68,0.18); }
+.err-indicator svg { flex-shrink: 0; }
+
+/* Error modal */
+.err-modal { max-width: 800px; }
+.err-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.err-table th { background: var(--bg-2); color: var(--text-2); font-weight: 600; padding: 9px 12px; text-align: left; border-bottom: 2px solid var(--border); white-space: nowrap; }
+.err-table td { padding: 8px 12px; border-bottom: 1px solid var(--border-soft); color: var(--text-0); vertical-align: top; }
+.err-table .err-type { color: var(--severe); font-weight: 600; font-family: monospace; white-space: nowrap; }
+.err-table .err-msg { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 11px; }
+.err-table .err-ts { white-space: nowrap; color: var(--text-3); font-size: 11px; }
+.err-table .err-tb { font-family: monospace; font-size: 10px; color: var(--text-2); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.err-table .err-tb:hover { color: var(--severe); }
+
 /* ---- GitHub link (top-right of homepage) ---- */
 .github-link {
   position: absolute;
@@ -528,7 +551,8 @@ aside .btn { font-size: 15px; padding: 14px 22px; }
 
 
 /* ---- Upload zones ---- */
-.upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.upload-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+@media (max-width: 780px) { .upload-grid { grid-template-columns: 1fr; } }
 .upload-zone { border: 1.5px dashed rgba(150, 170, 200, 0.6); border-radius: var(--r-lg); padding: 28px 24px; text-align: center; cursor: pointer; transition: all var(--dur) var(--ease); position: relative; background: rgba(255, 255, 255, 0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .upload-zone:hover { border-color: var(--border-strong); background: var(--bg-1); box-shadow: var(--sh-1); }
 .upload-zone.dragover { border-color: var(--accent); background: var(--accent-soft); }
@@ -545,6 +569,44 @@ aside .btn { font-size: 15px; padding: 14px 22px; }
 .uz-sub .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-family: ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; font-size: 11px; margin-left: 6px; }
 .upload-zone.normal .uz-sub .pill { background: var(--normal-soft); color: var(--normal-dark); }
 .upload-zone.defect .uz-sub .pill { background: var(--defect-soft); color: var(--defect-dark); }
+.upload-zone.dataset .uz-icon { background: var(--accent-soft); color: var(--accent); }
+.upload-zone.annotation .uz-icon { background: rgba(139,92,246,0.12); color: #7c3aed; }
+.upload-zone.masks .uz-icon { background: rgba(16,185,129,0.12); color: #059669; }
+.upload-zone.dataset:hover { border-color: var(--accent); }
+.upload-zone.annotation:hover { border-color: #7c3aed; }
+.upload-zone.masks:hover { border-color: #059669; }
+.upload-zone.has-file { border-style: solid; background: var(--bg-1); }
+.upload-zone.dataset.has-file { border-color: var(--accent); }
+.upload-zone.annotation.has-file { border-color: #7c3aed; }
+.upload-zone.masks.has-file { border-color: #059669; }
+.upload-zone.has-file .uz-sub { color: var(--text-0); }
+
+/* Database cards */
+.dataset-list { display: flex; flex-direction: column; gap: 12px; }
+.dataset-card { background: rgba(255,255,255,0.55); border: 1px solid rgba(255,255,255,0.6); border-radius: var(--r-md); padding: 16px 18px; backdrop-filter: blur(10px); cursor: pointer; transition: all var(--dur) var(--ease); }
+.dataset-card:hover { border-color: var(--border-strong); box-shadow: var(--sh-1); }
+.dataset-card.active-batch { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent); }
+.dataset-card .dc-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.dataset-card .dc-batch { font-weight: 600; font-size: 14px; color: var(--accent-dark); font-family: ui-monospace, monospace; }
+.dataset-card .dc-time { font-size: 11px; color: var(--text-3); font-family: ui-monospace, monospace; }
+.dataset-card .dc-files { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+.dataset-card .dc-file { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(255,255,255,0.5); border-radius: var(--r-sm); font-size: 12px; }
+.dataset-card .dc-file .dc-fi { width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center; flex-shrink: 0; }
+.dataset-card .dc-file .dc-fi.zip { background: var(--accent-soft); color: var(--accent); }
+.dataset-card .dc-file .dc-fi.json { background: rgba(139,92,246,0.12); color: #7c3aed; }
+.dataset-card .dc-file .dc-fi.mask { background: rgba(16,185,129,0.12); color: #059669; }
+.dataset-card .dc-file .dc-fi svg { width: 16px; height: 16px; }
+.dataset-card .dc-file .dc-fn { flex: 1; color: var(--text-0); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dataset-card .dc-file .dc-fm { font-family: ui-monospace, monospace; color: var(--text-2); font-size: 11px; white-space: nowrap; }
+.dataset-card .dc-del { background: none; border: none; cursor: pointer; opacity: 0; color: var(--text-3); padding: 2px 4px; border-radius: 4px; transition: opacity var(--dur) var(--ease), color var(--dur) var(--ease); }
+.dataset-card:hover .dc-del { opacity: 1; }
+.dataset-card .dc-del:hover { color: var(--severe); background: var(--severe-soft); }
+
+/* Results toolbar */
+.results-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.rt-summary { font-size: 13px; color: var(--text-1); }
+.rt-summary strong { font-weight: 600; }
+.result-thumb .thumb-name { font-size: 18px; font-weight: 700; color: var(--accent-dark); font-family: ui-monospace, monospace; }
 
 /* ---- Gallery ---- */
 .gallery-tabs { display: flex; gap: 4px; padding: 4px; background: var(--bg-2); border-radius: var(--r-md); margin-bottom: 16px; width: fit-content; border: 1px solid var(--border-soft); }
@@ -762,7 +824,8 @@ select.field:disabled { opacity: 0.5; cursor: not-allowed; }
 .workspace .panel-head { padding: 9px 14px; }
 .workspace .panel-head h2 { font-size: 12px; }
 .workspace .panel-body { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px; }
-.workspace main { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 14px; min-height: 0; }
+.workspace main { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; gap: 14px; min-height: 0; }
+.workspace main .panel:nth-child(3) { grid-column: 1 / -1; }
 .workspace aside { min-height: 0; }
 .workspace .config-label { margin-bottom: 8px; font-size: 12px; }
 .workspace .model-card { padding: 10px 12px; gap: 10px; }
@@ -770,11 +833,12 @@ select.field:disabled { opacity: 0.5; cursor: not-allowed; }
 .workspace .model-card .mc-name { font-size: 14px; }
 .workspace .model-card .mc-desc { font-size: 12px; }
 .workspace .weight-item { padding: 9px 12px; gap: 9px; }
-.workspace .upload-grid { gap: 12px; }
-.workspace .upload-zone { padding: 16px 14px; }
-.workspace .uz-icon { width: 40px; height: 40px; margin: 0 auto 8px; border-radius: 11px; }
-.workspace .uz-title { font-size: 14px; }
-.workspace .uz-sub { font-size: 12px; }
+.workspace .upload-grid { gap: 10px; grid-template-columns: repeat(3, 1fr); }
+.workspace .upload-zone { padding: 14px 10px; }
+.workspace .uz-icon { width: 36px; height: 36px; margin: 0 auto 6px; border-radius: 10px; }
+.workspace .uz-icon svg { width: 22px; height: 22px; }
+.workspace .uz-title { font-size: 13px; }
+.workspace .uz-sub { font-size: 11px; }
 .workspace .gallery { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
 .workspace .gallery-tabs { margin-bottom: 10px; }
 .workspace .train-grid { gap: 12px; margin-bottom: 12px; }
