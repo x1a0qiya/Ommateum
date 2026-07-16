@@ -117,5 +117,7 @@ def index():
 
 # ==================== 启动服务 ====================
 if __name__ == '__main__':
+    # 启动时检查权重目录，为空则自动下载默认权重
+    serves.ensure_default_weights()
     # 默认在 5000 端口启动
     app.run(host='0.0.0.0', port=5000, debug=True)

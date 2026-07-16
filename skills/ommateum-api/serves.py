@@ -15,6 +15,59 @@ DATASET_DIR = os.path.join(api_utils.get_root_dir(), 'dataset')
 task_events = {} #{ task_id: { "event": threading.Event(), "status": "processing", "error": None, "task": "train" } }
 
 
+DEFAULT_WEIGHT_ID = "yolov11"
+DEFAULT_WEIGHT_CONFIG = {
+    "id": DEFAULT_WEIGHT_ID,
+    "name": "YOLOv11",
+    "description": "轻量级实时目标检测",
+    "architecture": "Ultralytics YOLOv11",
+    "input_size": [640, 640],
+    "size_mb": 5.4,
+    "accuracy": 0.952,
+    "trained": False,
+}
+
+
+def ensure_default_weights():
+    """如果权重目录为空，自动下载 yolo11n.pt 并创建默认权重结构。"""
+    os.makedirs(WEIGHTS_DIR, exist_ok=True)
+
+    # 检查是否已有权重配置
+    has_configs = False
+    for d in os.listdir(WEIGHTS_DIR):
+        sub = os.path.join(WEIGHTS_DIR, d)
+        if os.path.isdir(sub) and os.path.isfile(os.path.join(sub, 'config.json')):
+            has_configs = True
+            break
+
+    if has_configs:
+        return
+
+    print("[INFO] 权重目录为空，准备下载默认权重 yolo11n.pt ...")
+
+    weight_dir = os.path.join(WEIGHTS_DIR, DEFAULT_WEIGHT_ID)
+    yolo_dir = os.path.join(weight_dir, 'yolo')
+    os.makedirs(yolo_dir, exist_ok=True)
+
+    # 下载 yolo11n.pt
+    pt_path = os.path.join(yolo_dir, f'{DEFAULT_WEIGHT_ID}_best.pt')
+    try:
+        from ultralytics.utils.downloads import attempt_download_asset
+        cached = attempt_download_asset('yolo11n.pt')
+        shutil.copy2(cached, pt_path)
+        pt_size = round(os.path.getsize(pt_path) / (1024 * 1024), 1)
+        print(f"[INFO] 默认权重已下载: {pt_path} ({pt_size} MB)")
+    except Exception as e:
+        print(f"[WARN] 默认权重下载失败: {e}")
+        # 创建空文件以保持系统正常工作
+        open(pt_path, 'wb').close()
+
+    # 写入 config.json
+    with open(os.path.join(weight_dir, 'config.json'), 'w', encoding='utf-8') as f:
+        json.dump(DEFAULT_WEIGHT_CONFIG, f, ensure_ascii=False, indent=2)
+    print(f"[INFO] 默认权重配置已创建: {os.path.join(weight_dir, 'config.json')}")
+
+
 def get_api() -> dict:
     ...
 
@@ -46,7 +99,7 @@ def get_models() -> dict:
         return {
             'status': 'ok',
             'timestamp': get_datetime(),
-            'data': configs
+            'data': configs['data']
         }
     except Exception as e:
         return {
@@ -58,11 +111,10 @@ def get_models() -> dict:
 def get_weights(model_id: str | None) -> dict:
     try:
         configs = api_utils.get_model_configs(WEIGHTS_DIR, model_id=model_id)
-        configs['model_id'] = model_id
         return {
             'status': 'ok',
             'timestamp': get_datetime(),
-            'data': configs
+            'data': configs['data']
         }
     except Exception as e:
         return {
