@@ -8,7 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.ommateum.models.test import segment
 from src.ommateum.models.train import train_model
-from src.ommateum.models.identify.generate_data_yaml import coco2yolo
+from src.ommateum.models.identify.coco2yolo import coco2yolo as coco2yolo_convert
+from src.ommateum.models.identify.generate_data_yaml import generate_data_yaml
 
 WEIGHTS_DIR = os.path.join(api_utils.get_root_dir(), 'weights')
 DATASET_DIR = os.path.join(api_utils.get_root_dir(), 'dataset')
@@ -335,10 +336,7 @@ def train(data: str | None) -> dict:
             }
 
         if api_utils.count_path_items(batch_dir) == 2:
-            coco2yolo_args = Namespace(
-                coco_json=json_name,
-            )
-            coco2yolo(coco2yolo_args)
+            coco2yolo_convert(json_name)
 
 
         train_dir = os.path.join(batch_dir, 'train')
