@@ -334,7 +334,8 @@ def train(data: str | None) -> dict:
                 'error': "The dataset don't have any annotation file"
             }
 
-        if api_utils.count_path_items(batch_dir) == 2:
+        count = api_utils.count_path_items(batch_dir)
+        if count > 1 and count < 4:
             coco2yolo_args = Namespace(
                 coco_json=json_name,
             )
@@ -342,7 +343,7 @@ def train(data: str | None) -> dict:
 
 
         train_dir = os.path.join(batch_dir, 'train')
-        masks_dir = os.path.join(batch_dir, 'masks')
+        masks_dir = os.path.join(train_dir, 'masks')
         labels_dir = os.path.join(train_dir, 'labels')
         train_images_dir = os.path.join(train_dir, 'images')
         weights_dir = os.path.join(WEIGHTS_DIR, task_id)
