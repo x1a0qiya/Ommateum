@@ -7,13 +7,14 @@ YOLO 格式标注（归一化 class_id x_center y_center width height）。
 
 功能:
   - 从 images/ 目录读取图片，自动查找同级 labels/ 下的同名 .txt 标注
-  - 支持指定输出目录 (output/images/ + output/labels/)，默认在原路径追加
-  - 每张原图生成 N 个增强变体，命名格式: basename_aug{N}.jpg / .txt
+  - 若存在同级 masks/ 目录，自动同步增强掩码（仅几何变换）
+  - 支持指定输出目录 (output/images/ + output/labels/ + output/masks/)，默认在原路径追加
+  - 每张原图生成 N 个增强变体，命名格式: basename_aug{N}.jpg / .txt / .png
   - 无标注的图片仅做图像增强，不生成空标签文件
   - 支持多类别、多尺度、多光照条件的增强管道
 
 用法:
-  # 在原 images / labels 目录中追加增强数据（默认 3 个变体）
+  # 在原 images / labels / masks 目录中追加增强数据（自动检测 masks/）
   python src/ommateum/models/identify/augment_dataset.py \
       --images /path/to/dataset/images
 
@@ -23,10 +24,10 @@ YOLO 格式标注（归一化 class_id x_center y_center width height）。
       --output /path/to/augmented \
       --num_aug 5
 
-  # 同时指定 labels 目录（若不与 images 同级）
+  # 显式指定 masks 目录
   python src/ommateum/models/identify/augment_dataset.py \
       --images /path/to/dataset/images \
-      --labels /path/to/dataset/labels \
+      --masks /path/to/dataset/masks \
       --output /path/to/augmented \
       --num_aug 3
 
@@ -36,6 +37,7 @@ Python API:
   augment_dataset(
       images_dir="/path/to/images",
       labels_dir=None,          # 默认取 images 同级的 labels/
+      masks_dir=None,           # 默认取 images 同级的 masks/，不存在则跳过
       output_dir="/path/to/out",# 默认 None → 写回原路径
       num_aug=3,
   )
@@ -43,13 +45,11 @@ Python API:
 
 import argparse
 import os
-import random
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 import albumentations as A
 import cv2
-import numpy as np
 
 # ── 支持的图像后缀 ──
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
@@ -57,74 +57,71 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
 
 # ── 增强管道定义 ──
 
-def _build_augmentation_pipeline(image_size: Tuple[int, int]) -> A.Compose:
-    """
-    构建一组面向小样本目标检测的数据增强管道。
+# 阶段一：几何变换（作用于图像 + bbox + mask，三者严格同步）
+_GEOM_TRANSFORMS = [
+    A.HorizontalFlip(p=0.5),
+    A.VerticalFlip(p=0.1),
+    A.Affine(
+        scale=(0.85, 1.1),
+        translate_percent=(-0.1, 0.1),
+        rotate=(-15, 15),
+        shear=(-3, 3),
+        p=0.5,
+        border_mode=cv2.BORDER_CONSTANT,
+    ),
+]
 
-    说明:
-      - 使用弱的几何变换（旋转 ≤15°、缩放 ≤10%）以保持小目标不丢失。
-      - 颜色/光照增强独立于几何变换，仅改变像素值，不改变 bbox 坐标。
-      - 所有 bbox 参数使用 YOLO 归一化格式。
-      - 每次调用返回的增强结果随机，多个变体之间自然不同。
+# 阶段二：像素变换（仅作用于 RGB 图像，不触碰 mask / bbox）
+_PIXEL_TRANSFORMS = [
+    A.OneOf(
+        [
+            A.RandomBrightnessContrast(
+                brightness_limit=0.2, contrast_limit=0.2, p=1.0,
+            ),
+            A.HueSaturationValue(
+                hue_shift_limit=10, sat_shift_limit=20,
+                val_shift_limit=20, p=1.0,
+            ),
+        ],
+        p=0.5,
+    ),
+    A.OneOf(
+        [
+            A.GaussNoise(std_range=(0.02, 0.10), p=1.0),
+            A.GaussianBlur(blur_limit=(3, 5), p=1.0),
+            A.MotionBlur(blur_limit=(3, 5), p=1.0),
+        ],
+        p=0.3,
+    ),
+    A.RandomGamma(gamma_limit=(80, 120), p=0.2),
+    A.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=0.2),
+]
 
-    Args:
-        image_size (Tuple[int, int]): 原始图像的 (height, width)，用于
-            bbox 边界裁剪参考。
+
+def _build_pipelines(
+    with_bbox: bool = False,
+    with_mask: bool = False,
+) -> Tuple[A.Compose, A.Compose]:
+    """根据数据可用性构建两阶段管道。
+
+    阶段 1 — 几何变换管道：通过 additional_targets 保证 image / bbox / mask 严格同步。
+    阶段 2 — 像素变换管道：仅作用于 RGB 图像。
 
     Returns:
-        A.Compose: 配置好的 albumentations Compose 对象。
+        (geom_pipeline, pixel_pipeline)
     """
-    h, w = image_size
-
-    return A.Compose(
-        [
-            # ── 几何变换（同步变换 bbox）──
-            A.HorizontalFlip(p=0.5),
-            A.VerticalFlip(p=0.1),
-            A.Affine(
-                scale=(0.85, 1.1),
-                translate_percent=(-0.1, 0.1),
-                rotate=(-15, 15),
-                shear=(-3, 3),
-                p=0.5,
-                border_mode=cv2.BORDER_CONSTANT,
-            ),
-            # ── 颜色 / 光照增强（仅限像素，不影响 bbox）──
-            A.OneOf(
-                [
-                    A.RandomBrightnessContrast(
-                        brightness_limit=0.2,
-                        contrast_limit=0.2,
-                        p=1.0,
-                    ),
-                    A.HueSaturationValue(
-                        hue_shift_limit=10,
-                        sat_shift_limit=20,
-                        val_shift_limit=20,
-                        p=1.0,
-                    ),
-                ],
-                p=0.5,
-            ),
-            A.OneOf(
-                [
-                    A.GaussNoise(std_range=(0.02, 0.10), p=1.0),
-                    A.GaussianBlur(blur_limit=(3, 5), p=1.0),
-                    A.MotionBlur(blur_limit=(3, 5), p=1.0),
-                ],
-                p=0.3,
-            ),
-            # ── 降质模拟（可选提升鲁棒性）──
-            A.RandomGamma(gamma_limit=(80, 120), p=0.2),
-            A.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=0.2),
-        ],
-        bbox_params=A.BboxParams(
+    geom_kwargs: dict = {}
+    if with_bbox:
+        geom_kwargs["bbox_params"] = A.BboxParams(
             format="yolo",
             label_fields=["class_labels"],
             min_visibility=0.3,
             min_area=0.0,
-        ),
-    )
+        )
+    if with_mask:
+        geom_kwargs["additional_targets"] = {"mask": "image"}
+
+    return A.Compose(_GEOM_TRANSFORMS, **geom_kwargs), A.Compose(_PIXEL_TRANSFORMS)
 
 
 # ── 标注读取 / 写入 ──
@@ -210,21 +207,24 @@ def _write_yolo_labels(label_path: str, bboxes: List[List[float]], class_ids: Li
 def augment_dataset(
     images_dir: str,
     labels_dir: Optional[str] = None,
+    masks_dir: Optional[str] = None,
     output_dir: Optional[str] = None,
     num_aug: int = 3,
 ) -> dict:
     """
     对指定数据集进行数据增强。
 
-    遍历 images_dir 下所有图片，读取同级 labels/ 中的 YOLO 标注，
-    每张图片生成 num_aug 个增强变体，同步变换 bbox。
+    遍历 images_dir 下所有图片，自动查找同级 labels/ 和 masks/，
+    每张图片生成 num_aug 个增强变体，同步变换 bbox 和掩码。
 
     Args:
         images_dir (str): 原始图片目录路径。
         labels_dir (Optional[str]): 原始标注目录路径，默认取 images_dir
             父目录下的 labels/。若目录不存在则不处理标注。
+        masks_dir (Optional[str]): 掩码目录路径，默认取 images_dir
+            父目录下的 masks/。若目录不存在则不处理掩码。
         output_dir (Optional[str]): 增强数据输出根目录，默认 None
-            表示在原 images / labels 目录中追加。
+            表示在原路径中追加。
         num_aug (int): 每张原图生成的增强变体数量，默认 3。
 
     Returns:
@@ -232,14 +232,17 @@ def augment_dataset(
             - total_images (int): 处理的原始图片数。
             - total_augmented (int): 生成的增强图片总数。
             - images_with_labels (int): 带标注的图片数。
+            - images_with_masks (int): 带掩码的图片数。
             - output_images_dir (str): 增强图片输出目录。
             - output_labels_dir (str): 增强标注输出目录。
+            - output_masks_dir (str): 增强掩码输出目录。
     """
     images_dir = os.path.abspath(images_dir)
+    parent_dir = os.path.dirname(images_dir)
 
     # ── 推断 labels 目录 ──
     if labels_dir is None:
-        inferred = os.path.join(os.path.dirname(images_dir), "labels")
+        inferred = os.path.join(parent_dir, "labels")
         labels_dir = inferred if os.path.isdir(inferred) else None
     else:
         labels_dir = os.path.abspath(labels_dir)
@@ -247,17 +250,33 @@ def augment_dataset(
             print(f"[WARN] 指定的 labels 目录不存在: {labels_dir}，将仅对图片做增强")
             labels_dir = None
 
+    # ── 推断 masks 目录 ──
+    if masks_dir is None:
+        inferred = os.path.join(parent_dir, "masks")
+        masks_dir = inferred if os.path.isdir(inferred) else None
+    else:
+        masks_dir = os.path.abspath(masks_dir)
+        if not os.path.isdir(masks_dir):
+            print(f"[WARN] 指定的 masks 目录不存在: {masks_dir}，将不处理掩码")
+            masks_dir = None
+    if masks_dir:
+        print(f"[INFO] 检测到掩码目录: {masks_dir}，将同步增强掩码")
+
     # ── 确定输出路径 ──
     if output_dir is None:
         out_images_dir = images_dir
-        out_labels_dir = labels_dir  # 可能为 None
+        out_labels_dir = labels_dir
+        out_masks_dir = masks_dir
     else:
         output_dir = os.path.abspath(output_dir)
         out_images_dir = os.path.join(output_dir, "images")
         out_labels_dir = os.path.join(output_dir, "labels") if labels_dir else None
+        out_masks_dir = os.path.join(output_dir, "masks") if masks_dir else None
         os.makedirs(out_images_dir, exist_ok=True)
         if out_labels_dir:
             os.makedirs(out_labels_dir, exist_ok=True)
+        if out_masks_dir:
+            os.makedirs(out_masks_dir, exist_ok=True)
 
     # ── 收集待处理图片 ──
     image_files: List[str] = []
@@ -271,13 +290,16 @@ def augment_dataset(
             "total_images": 0,
             "total_augmented": 0,
             "images_with_labels": 0,
+            "images_with_masks": 0,
             "output_images_dir": out_images_dir,
             "output_labels_dir": out_labels_dir or "",
+            "output_masks_dir": out_masks_dir or "",
         }
 
     total_images = len(image_files)
     total_augmented = 0
     images_with_labels = 0
+    images_with_masks = 0
 
     # ── 逐张增强 ──
     for fname in image_files:
@@ -290,57 +312,74 @@ def augment_dataset(
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         h, w = image.shape[:2]
 
+        stem = Path(fname).stem
+
         # 读取对应标注（如果存在）
         has_labels = False
         bboxes: List[List[float]] = []
         class_ids: List[int] = []
         if labels_dir:
-            stem = Path(fname).stem
             label_path = os.path.join(labels_dir, f"{stem}.txt")
             if os.path.isfile(label_path):
                 bboxes, class_ids = _read_yolo_labels(label_path)
-                # 裁剪越界 bbox 到 [0,1] 范围（部分标注工具可能产生超界值）
                 if bboxes:
                     bboxes, class_ids = _clip_bboxes(bboxes, class_ids)
                 if bboxes:
                     has_labels = True
                     images_with_labels += 1
 
-        # 构建增强管道
-        pipeline = _build_augmentation_pipeline((h, w))
+        # 读取对应掩码（如果存在）
+        has_mask = False
+        mask_image = None
+        if masks_dir:
+            for ext in [".png", ".jpg", ".jpeg", ".bmp"]:
+                mask_path = os.path.join(masks_dir, f"{stem}{ext}")
+                if os.path.isfile(mask_path):
+                    mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+                    if mask_image is not None and mask_image.shape[:2] == (h, w):
+                        has_mask = True
+                        images_with_masks += 1
+                    else:
+                        mask_image = None
+                    break
 
-        base_stem = Path(fname).stem
+        # 构建两阶段管道
+        # 阶段 1 — 几何变换：图 + bbox + mask 在同一 Compose 中严格同步
+        # 阶段 2 — 像素变换：仅作用于 RGB 图像
+        geom_pipeline, pixel_pipeline = _build_pipelines(
+            with_bbox=has_labels, with_mask=has_mask
+        )
+
+        base_stem = stem
 
         for aug_idx in range(num_aug):
-            # 设置随机种子以确保图像与 bbox 的增强一致
-            seed = random.randint(0, 2**31 - 1)
-            random.seed(seed)
-            np.random.seed(seed)
-
+            # ── 组装几何变换参数 ──
+            geom_kwargs: dict = {"image": image.copy()}
             if has_labels:
-                transformed = pipeline(
-                    image=image.copy(),
-                    bboxes=bboxes.copy(),
-                    class_labels=class_ids.copy(),
-                )
-                aug_image = transformed["image"]
-                aug_bboxes: List[List[float]] = transformed["bboxes"]
-                aug_class_ids: List[int] = transformed["class_labels"]
+                geom_kwargs["bboxes"] = bboxes.copy()
+                geom_kwargs["class_labels"] = class_ids.copy()
+            if has_mask:
+                geom_kwargs["mask"] = mask_image.copy()
 
-                # 裁剪 bbox 到 [0,1] 范围并剔除无效框
+            geom_result = geom_pipeline(**geom_kwargs)
+            # 图像再经过像素变换
+            aug_image = pixel_pipeline(image=geom_result["image"])["image"]
+
+            # ── bbox 后处理 ──
+            if has_labels:
+                aug_bboxes: List[List[float]] = geom_result["bboxes"]
+                aug_class_ids: List[int] = geom_result["class_labels"]
+
                 valid_bboxes = []
                 valid_class_ids = []
                 for bbox, cls_id in zip(aug_bboxes, aug_class_ids):
                     x, y, bw, bh = bbox
-                    # 裁剪到 [0,1]
                     x = max(0.0, min(1.0, x))
                     y = max(0.0, min(1.0, y))
                     bw = max(0.0, min(1.0, bw))
                     bh = max(0.0, min(1.0, bh))
-                    # 剔除退化框
                     if bw <= 0.0 or bh <= 0.0:
                         continue
-                    # 裁剪后确保 bbox 不超出边界
                     x1 = max(0.0, x - bw / 2.0)
                     y1 = max(0.0, y - bh / 2.0)
                     x2 = min(1.0, x + bw / 2.0)
@@ -349,34 +388,20 @@ def augment_dataset(
                     new_h = y2 - y1
                     if new_w <= 0.0 or new_h <= 0.0:
                         continue
-                    # 转回 YOLO 格式
                     valid_bboxes.append([x1 + new_w / 2.0, y1 + new_h / 2.0, new_w, new_h])
                     valid_class_ids.append(cls_id)
 
-                # 保存增强后的标注
                 if out_labels_dir and valid_bboxes:
                     out_label_name = f"{base_stem}_aug{aug_idx}.txt"
                     out_label_path = os.path.join(out_labels_dir, out_label_name)
                     _write_yolo_labels(out_label_path, valid_bboxes, valid_class_ids)
-            else:
-                # 无标注时仅增强图像，不设 bbox 参数避免报错
-                pixel_only = A.Compose([
-                    A.HorizontalFlip(p=0.5),
-                    A.RandomBrightnessContrast(
-                        brightness_limit=0.2, contrast_limit=0.2, p=0.5
-                    ),
-                    A.HueSaturationValue(
-                        hue_shift_limit=10, sat_shift_limit=20,
-                        val_shift_limit=20, p=0.5
-                    ),
-                    A.GaussNoise(std_range=(0.02, 0.10), p=0.3),
-                    A.GaussianBlur(blur_limit=(3, 5), p=0.3),
-                    A.RandomGamma(gamma_limit=(80, 120), p=0.2),
-                ])
-                random.seed(seed)
-                np.random.seed(seed)
-                transformed = pixel_only(image=image.copy())
-                aug_image = transformed["image"]
+
+            # ── 掩码保存 ──
+            if has_mask and out_masks_dir:
+                aug_mask = geom_result["mask"]
+                out_mask_name = f"{base_stem}_aug{aug_idx}.png"
+                out_mask_path = os.path.join(out_masks_dir, out_mask_name)
+                cv2.imwrite(out_mask_path, aug_mask)
 
             # 保存增强后的图片
             out_img_name = f"{base_stem}_aug{aug_idx}.jpg"
@@ -392,16 +417,21 @@ def augment_dataset(
     print(f"  原始图片: {total_images}")
     print(f"  增强图片: {total_augmented}")
     print(f"  带标注图片: {images_with_labels}")
+    print(f"  带掩码图片: {images_with_masks}")
     print(f"  图片输出: {out_images_dir}")
     if out_labels_dir:
         print(f"  标注输出: {out_labels_dir}")
+    if out_masks_dir:
+        print(f"  掩码输出: {out_masks_dir}")
 
     return {
         "total_images": total_images,
         "total_augmented": total_augmented,
         "images_with_labels": images_with_labels,
+        "images_with_masks": images_with_masks,
         "output_images_dir": out_images_dir,
         "output_labels_dir": out_labels_dir or "",
+        "output_masks_dir": out_masks_dir or "",
     }
 
 
@@ -424,6 +454,12 @@ if __name__ == "__main__":
         help="原始标注目录路径 (labels/)，默认取 images 同级的 labels/",
     )
     parser.add_argument(
+        "--masks",
+        type=str,
+        default=None,
+        help="掩码目录路径 (masks/)，默认取 images 同级的 masks/，不存在则跳过掩码增强",
+    )
+    parser.add_argument(
         "--output",
         type=str,
         default=None,
@@ -440,6 +476,7 @@ if __name__ == "__main__":
     augment_dataset(
         images_dir=args.images,
         labels_dir=args.labels,
+        masks_dir=args.masks,
         output_dir=args.output,
         num_aug=args.num_aug,
     )

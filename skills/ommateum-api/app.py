@@ -29,11 +29,15 @@ def api_images():
     name = request.args.get('name')
     return jsonify(serves.get_images(name))
 
+@app.route('/api/dataset', method=['GET'])
+def get_dataset():
+    return jsonify(serves.get_dataset())
+
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     return jsonify(serves.get_stats())
 
-@app.route('/api/dataset', methods=['POST'])
+@app.route('/api/upload', methods=['POST'])
 def upload_zip():
     images_zip = request.files.get('images_zip')
     annotation_json = request.files.get('annotation_json')

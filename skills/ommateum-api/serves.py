@@ -47,7 +47,7 @@ def get_models() -> dict:
         return {
             'status': 'ok',
             'timestamp': get_datetime(),
-            'data': configs['data']
+            'data': configs
         }
     except Exception as e:
         return {
@@ -58,44 +58,12 @@ def get_models() -> dict:
 
 def get_weights(model_id: str | None) -> dict:
     try:
-        if model_id is None:
-            return {
-                'status': 'error',
-                'timestamp': get_datetime(),
-                'error': 'model_id is required'
-            }
-
-        model_dir = Path(WEIGHTS_DIR) / model_id
-        if not model_dir.is_dir():
-            return {
-                'status': 'ok',
-                'timestamp': get_datetime(),
-                'data': {'models': [], 'model_id': model_id}
-            }
-
-        # Scan for .pt weight files in the model directory
-        total_bytes = 0
-        has_pt = False
-        for pt_file in model_dir.rglob('*.pt'):
-            has_pt = True
-            total_bytes += pt_file.stat().st_size
-
-        weights = []
-        if has_pt:
-            weights.append({
-                'id': model_id,
-                'name': model_id,
-                'size_mb': round(total_bytes / (1024 * 1024), 1),
-                'trained': False
-            })
-
+        configs = api_utils.get_model_configs(WEIGHTS_DIR, model_id=model_id)
+        configs['model_id'] = model_id
         return {
             'status': 'ok',
             'timestamp': get_datetime(),
-            'data': {
-                'models': weights,
-                'model_id': model_id
-            }
+            'data': configs
         }
     except Exception as e:
         return {
@@ -121,6 +89,21 @@ def get_images(name: str | None) -> dict:
                 'images': imgs,
                 'total': len(imgs)
             }
+        }
+    except Exception as e:
+        return {
+            'status': 'error',
+            'timestamp': get_datetime(),
+            'error': repr(e)
+        }
+
+def get_dataset() -> dict:
+    try:
+        info = api_utils.get_all_dataset(DATASET_DIR)
+        return {
+            'status': 'ok',
+            'timestamp': get_datetime(),
+            'data': info
         }
     except Exception as e:
         return {
@@ -165,7 +148,6 @@ def upload_zip(images_zip, annotation_json, masks_zip) -> dict:
         }
 
         if annotation_json is not None and annotation_json.filename:
-            # annotation_json 是 FileStorage, 需先读取再解析 JSON
             json_content = json.loads(annotation_json.read())
             ann_info = api_utils.save_json_file(
                 json_data=json_content,
@@ -174,7 +156,7 @@ def upload_zip(images_zip, annotation_json, masks_zip) -> dict:
             )
             
             js['data']['annotation_file'] = {
-                'name': 'coco_annotations.json',
+                'name': 'annotations.json',
                 'size_kb': ann_info['size_kb'] 
             }
 
@@ -343,11 +325,18 @@ def train(data: str | None) -> dict:
         batch_dir = os.path.join(DATASET_DIR, data['batch_name'])
         images_dir = os.path.join(batch_dir, 'images')
         json_name = os.path.join(batch_dir, 'coco_annotations.json')
+        if not os.path.exists(json_name):
+            return {
+                'status': 'error',
+                'timestamp': get_datetime(),
+                'error': "The dataset don't have any annotation file"
+            }
 
-        coco2yolo_args = Namespace(
-            coco_json=json_name,
-        )
-        coco2yolo(coco2yolo_args)
+        if api_utils.count_path_items(batch_dir) == 2:
+            coco2yolo_args = Namespace(
+                coco_json=json_name,
+            )
+            coco2yolo(coco2yolo_args)
 
 
         train_dir = os.path.join(batch_dir, 'train')
@@ -386,7 +375,12 @@ def train(data: str | None) -> dict:
                 'patience',
                 'freeze',
                 'pretrained',
-                'yolo_lr'
+                'yolo_lr',
+                'workers',
+                'lrf',
+                'cos_lr',
+                'full_train',
+                'use_dora'
             ]
         )
         

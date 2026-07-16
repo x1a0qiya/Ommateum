@@ -152,6 +152,52 @@ def scan_images_max_size(path: str, name: str) -> tuple:
                 mx = max(mx, (meta['width'], meta['height']))
     return mx
 
+def _get_folder_size(folder_path):
+    """计算文件夹的总大小（字节）"""
+    total_size = 0
+    try:
+        for dirpath, dirnames, filenames in os.walk(folder_path):
+            for f in filenames:
+                fp = os.path.join(dirpath, f)
+                if not os.path.islink(fp):
+                    total_size += os.path.getsize(fp)
+    except (PermissionError, FileNotFoundError):
+        pass
+    return total_size
+
+def get_all_dataset(path: str) -> dict:
+    """
+    返回已有的 dataset.
+
+    Args:
+        path (str) : dataset 路径.
+    Returns:
+        dict: dataset 字典.
+    """
+
+    dataset_dir = Path(path)
+    configs = {
+        'dataset': [],
+        'total': 0
+    }
+    total = 0
+
+    for dir in dataset_dir.glob('*'):
+        if dir.is_dir():
+            name = dir.name
+            sz_kb = round(_get_folder_size(dir) / 1024, 1)
+            ann_path = os.path.join(dir, 'annotation.json')
+            can_train = os.path.exists(ann_path)
+            configs['dataset'].append({
+                'id': name,
+                'size_kb': sz_kb,
+                'can_train': can_train
+            })
+            total += 1
+    
+    configs['total'] = total
+    return configs
+
 def handle_zip_upload(
     file_stream: SaveableFileStream,
     original_filename: str,
