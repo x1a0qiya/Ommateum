@@ -95,6 +95,21 @@ def get_images(name: str | None) -> dict:
             'timestamp': get_datetime(),
             'error': repr(e)
         }
+
+def get_dataset() -> dict:
+    try:
+        info = api_utils.get_all_dataset(DATASET_DIR)
+        return {
+            'status': 'ok',
+            'timestamp': get_datetime(),
+            'data': info
+        }
+    except Exception as e:
+        return {
+            'status': 'error',
+            'timestamp': get_datetime(),
+            'error': repr(e)
+        }
     
 def upload_zip(images_zip, annotation_json, masks_zip) -> dict:
     try:
@@ -140,7 +155,7 @@ def upload_zip(images_zip, annotation_json, masks_zip) -> dict:
             )
             
             js['data']['annotation_file'] = {
-                'name': 'coco_annotations.json',
+                'name': 'annotations.json',
                 'size_kb': ann_info['size_kb'] 
             }
 
