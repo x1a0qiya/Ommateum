@@ -547,6 +547,8 @@ aside .btn { font-size: 15px; padding: 14px 22px; }
 .adv-field input:focus { outline: none; border-color: var(--accent); }
 .adv-field .chk { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-1); padding: 8px 0; }
 .adv-field .help { font-size: 11px; color: var(--text-3); line-height: 1.4; }
+.adv-field .adv-err { font-size: 11px; color: var(--severe); line-height: 1.3; min-height: 15px; display: block; }
+.adv-field.has-error input[type=text], .adv-field.has-error input[type=number] { border-color: var(--severe); box-shadow: 0 0 0 2px color-mix(in srgb, var(--severe) 20%, transparent); }
 .modal-foot { display: flex; justify-content: flex-end; gap: 12px; padding: 14px 22px; border-top: 1px solid var(--border-soft); }
 
 

@@ -194,10 +194,32 @@ def get_all_dataset(path: str) -> dict:
             sz_kb = round(_get_folder_size(dir) / 1024, 1)
             ann_path = os.path.join(dir, 'annotation.json')
             can_train = os.path.exists(ann_path)
+            
+            # 检测 masks 目录
+            masks_dir = os.path.join(dir, 'masks')
+            masks_info = None
+            if os.path.isdir(masks_dir):
+                mask_count = len([f for f in os.listdir(masks_dir) if os.path.isfile(os.path.join(masks_dir, f))])
+                masks_info = {
+                    'name': 'masks.zip',
+                    'size_kb': round(_get_folder_size(masks_dir) / 1024, 1),
+                    'mask_count': mask_count
+                }
+            
+            # 检测 images 目录
+            images_dir = os.path.join(dir, 'images')
+            image_count = 0
+            if os.path.isdir(images_dir):
+                image_count = len([f for f in os.listdir(images_dir)
+                                   if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.webp'))])
+            
             configs['dataset'].append({
                 'id': name,
                 'size_kb': sz_kb,
-                'can_train': can_train
+                'can_train': can_train,
+                'image_count': image_count,
+                'masks_info': masks_info,
+                'has_annotation': os.path.exists(ann_path),
             })
             total += 1
     

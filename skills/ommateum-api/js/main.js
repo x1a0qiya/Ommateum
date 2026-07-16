@@ -469,7 +469,10 @@ async function runPredict() {
   if (!state.selectedModel || !state.selectedWeight) { toast('请先选择模型和权重', 'error'); return; }
   if (!state.selectedBatch) { toast('请先上传数据集并选择批次', 'error'); return; }
   var overlay = $('#scanOverlay');
-  $('#scanLabel').textContent = '正在执行缺陷检测…'; $('#scanSub').textContent = '批次: ' + state.selectedBatch;
+  var modelName = (state.models.find(function(m){return m.id===state.selectedModel;})||{}).name || state.selectedModel;
+  var weightName = (state.weights.find(function(w){return w.id===state.selectedWeight;})||{}).name || state.selectedWeight;
+  $('#scanLabel').textContent = '正在执行缺陷检测…';
+  $('#scanSub').textContent = modelName + ' · ' + weightName + ' · 批次: ' + state.selectedBatch;
   overlay.classList.add('show');
   try {
     var sseResult = await submitTask(state.selectedBatch, state.selectedWeight);
@@ -497,31 +500,48 @@ function exportResults(){
    Training & Export
    ============================================================ */
 const TRAIN_PARAMS = [
-  { name:'yolo_epochs',type:'int',def:50,group:'yolo',help:'YOLO 训练轮数' },
-  { name:'imgsz',type:'int',def:640,group:'yolo',help:'输入图像尺寸' },
-  { name:'yolo_batch_size',type:'int',def:16,group:'yolo',help:'YOLO 批大小' },
-  { name:'workers',type:'int',def:4,group:'yolo',help:'数据加载线程数' },
-  { name:'patience',type:'int',def:10,group:'yolo',help:'早停耐心值' },
-  { name:'freeze',type:'int',def:20,group:'yolo',help:'冻结主干前 N 层（0=全量微调）' },
-  { name:'yolo_lr',type:'float',def:0.001,group:'yolo',help:'YOLO 初始学习率' },
-  { name:'lrf',type:'float',def:0.1,group:'yolo',help:'最终学习率因子' },
+  { name:'yolo_epochs',type:'int',def:50,group:'yolo',help:'YOLO 训练轮数',min:1,max:1000 },
+  { name:'imgsz',type:'int',def:640,group:'yolo',help:'输入图像尺寸（建议 32 的倍数）',min:32,max:2048 },
+  { name:'yolo_batch_size',type:'int',def:16,group:'yolo',help:'YOLO 批大小',min:1,max:512 },
+  { name:'workers',type:'int',def:4,group:'yolo',help:'数据加载线程数',min:0,max:32 },
+  { name:'patience',type:'int',def:10,group:'yolo',help:'早停耐心值（0=禁用早停）',min:0,max:500 },
+  { name:'freeze',type:'int',def:20,group:'yolo',help:'冻结主干前 N 层（0=全量微调）',min:0,max:100 },
+  { name:'yolo_lr',type:'float',def:0.001,group:'yolo',help:'YOLO 初始学习率',min:0.00001,max:1.0 },
+  { name:'lrf',type:'float',def:0.1,group:'yolo',help:'最终学习率因子',min:0.001,max:1.0 },
   { name:'cos_lr',type:'bool',def:true,group:'yolo',help:'使用 cosine 学习率衰减' },
   { name:'full_train',type:'flag',def:false,group:'yolo',help:'全量训练模式' },
-  { name:'sam2_epochs',type:'int',def:8,group:'sam2',help:'SAM2 训练轮数' },
-  { name:'sam2_batch_size',type:'int',def:8,group:'sam2',help:'SAM2 批大小' },
-  { name:'lora_rank',type:'int',def:16,group:'sam2',help:'LoRA rank' },
+  { name:'sam2_epochs',type:'int',def:8,group:'sam2',help:'SAM2 训练轮数',min:1,max:1000 },
+  { name:'sam2_batch_size',type:'int',def:8,group:'sam2',help:'SAM2 批大小',min:1,max:512 },
+  { name:'lora_rank',type:'int',def:16,group:'sam2',help:'LoRA rank',min:1,max:256 },
   { name:'use_dora',type:'bool',def:true,group:'sam2',help:'是否使用 DoRA' },
-  { name:'sam2_lr',type:'float',def:0.0002,group:'sam2',help:'SAM2 学习率' },
-  { name:'weight_decay',type:'float',def:0.01,group:'sam2',help:'权重衰减' },
+  { name:'sam2_lr',type:'float',def:0.0002,group:'sam2',help:'SAM2 学习率',min:0.00001,max:1.0 },
+  { name:'weight_decay',type:'float',def:0.01,group:'sam2',help:'权重衰减',min:0.0,max:1.0 },
 ];
 const _TRAIN_DEFAULTS=Object.fromEntries(TRAIN_PARAMS.map(p=>[p.name,p.def]));
 function _advFieldHtml(p){
   const id='adv_'+p.name;const val=state.advParams[p.name]!==undefined?state.advParams[p.name]:p.def;
   if(p.type==='bool'||p.type==='flag'){return `<div class="adv-field${p.auto?' full':''}"><label class="chk"><input type="checkbox" id="${id}" ${val?'checked':''}> ${p.name}${p.auto?'（自动）':''}</label><span class="help">${p.help}</span></div>`;}
-  return `<div class="adv-field${p.auto?' full':''}"><label>${p.name}<span class="dv">默认 ${p.def}</span></label><input type="${p.type==='int'||p.type==='float'?'number':'text'}" id="${id}" ${p.type==='int'?'step="1"':''}${p.type==='float'?'step="any"':''} value="${val}"><span class="help">${p.help}${p.auto?'（自动生成，可覆盖）':''}</span></div>`;
+  var rangeAttr='';if(p.min!=null)rangeAttr+=` min="${p.min}"`;if(p.max!=null)rangeAttr+=` max="${p.max}"`;
+  return `<div class="adv-field${p.auto?' full':''}" data-param="${p.name}"><label>${p.name}<span class="dv">默认 ${p.def}${p.min!=null||p.max!=null?' · 范围 '+_rangeStr(p):''}</span></label><input type="${p.type==='int'||p.type==='float'?'number':'text'}" id="${id}" ${p.type==='int'?'step="1"':''}${p.type==='float'?'step="any"':''}${rangeAttr} value="${val}" oninput="_validateAdvField(TRAIN_PARAMS.find(p=>p.name==='${p.name}'))"><span class="help">${p.help}</span><span class="adv-err"></span></div>`;
+}
+function _rangeStr(p){var s=[];if(p.min!=null)s.push(p.min);s.push('~');if(p.max!=null)s.push(p.max);return s.join('');}
+function _validateAdvField(p){
+  var node=document.getElementById('adv_'+p.name);if(!node)return true;
+  var val=node.value.trim();if(val===''){_setFieldError(p.name,'');return true;}
+  var num=p.type==='int'?parseInt(val,10):parseFloat(val);
+  if(isNaN(num)){_setFieldError(p.name,'请输入有效数字');return false;}
+  if(p.min!=null&&num<p.min){_setFieldError(p.name,'最小值 '+p.min+'，当前值 '+num);return false;}
+  if(p.max!=null&&num>p.max){_setFieldError(p.name,'最大值 '+p.max+'，当前值 '+num);return false;}
+  _setFieldError(p.name,'');return true;
+}
+function _setFieldError(name,msg){
+  var field=document.querySelector(`.adv-field[data-param="${name}"]`);if(!field)return;
+  var err=field.querySelector('.adv-err');if(err)err.textContent=msg;
+  field.classList.toggle('has-error',!!msg);
 }
 function populateAdvFields(){const groups={yolo:$('#advFieldsYolo'),sam2:$('#advFieldsSam2')};for(const k in groups)groups[k].innerHTML='';TRAIN_PARAMS.forEach(p=>{const host=groups[p.group];if(host)host.insertAdjacentHTML('beforeend',_advFieldHtml(p));});}
-function collectAdvParams(){const out={};TRAIN_PARAMS.forEach(p=>{const id='adv_'+p.name,node=document.getElementById(id);if(!node)return;let v;if(p.type==='bool'||p.type==='flag')v=node.checked;else if(p.type==='int')v=node.value===''?p.def:parseInt(node.value,10);else if(p.type==='float')v=node.value===''?p.def:parseFloat(node.value);else v=node.value;if(p.auto){if(node.value!=='')out[p.name]=v;}else if(String(v)!==String(p.def))out[p.name]=v;});return out;}
+function collectAdvParams(){const out={},errs=[];TRAIN_PARAMS.forEach(p=>{const id='adv_'+p.name,node=document.getElementById(id);if(!node)return;let v;if(p.type==='bool'||p.type==='flag')v=node.checked;else if(p.type==='int'){if(!_validateAdvField(p))errs.push(p.name);v=node.value===''?p.def:parseInt(node.value,10);}else if(p.type==='float'){if(!_validateAdvField(p))errs.push(p.name);v=node.value===''?p.def:parseFloat(node.value);}else v=node.value;if(p.min==null&&p.max==null);else if(errs.includes(p.name))return;if(p.auto){if(node.value!=='')out[p.name]=v;}else if(String(v)!==String(p.def))out[p.name]=v;});return errs.length?{errors:errs}:out;}
+function _validateAllFields(){var ok=true;TRAIN_PARAMS.forEach(p=>{if(p.type==='bool'||p.type==='flag')return;if(!_validateAdvField(p))ok=false;});return ok;}
 let advCloseTimer=null;
 function openAdvModal(){populateAdvFields();const m=$('#advModal');if(advCloseTimer){clearTimeout(advCloseTimer);advCloseTimer=null;}m.style.display='flex';const modal=m.querySelector('.t-modal');modal.classList.remove('is-closing');requestAnimationFrame(()=>modal.classList.add('is-open'));}
 function closeAdvModal(){const m=$('#advModal'),modal=m.querySelector('.t-modal'),closeMs=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur'))||150;modal.classList.remove('is-open');modal.classList.add('is-closing');advCloseTimer=setTimeout(()=>{modal.classList.remove('is-closing');m.style.display='none';advCloseTimer=null;},closeMs);}
@@ -532,7 +552,7 @@ function updateTrainSummary(){
   $('#trainBtn').disabled=!state.selectedBatch||!state.online||!!state.trainingTaskId;
   $('#advHint').textContent=Object.keys(state.advParams).length>0?'已自定义 '+Object.keys(state.advParams).length+' 项参数':'默认参数 · 点击可修改';
 }
-function setupTrainingControls(){$('#advOptionsBtn').addEventListener('click',openAdvModal);$('#advClose').addEventListener('click',closeAdvModal);$('#advModal').addEventListener('click',(e)=>{if(e.target===$('#advModal'))closeAdvModal();});$('#advReset').addEventListener('click',()=>{state.advParams={};populateAdvFields();});$('#advConfirm').addEventListener('click',()=>{state.advParams=collectAdvParams();closeAdvModal();updateTrainSummary();});$('#trainBtn').addEventListener('click',startTraining);}
+function setupTrainingControls(){$('#advOptionsBtn').addEventListener('click',openAdvModal);$('#advClose').addEventListener('click',closeAdvModal);$('#advModal').addEventListener('click',(e)=>{if(e.target===$('#advModal'))closeAdvModal();});$('#advReset').addEventListener('click',()=>{state.advParams={};populateAdvFields();});$('#advConfirm').addEventListener('click',function(){var result=collectAdvParams();if(result.errors){toast('参数校验失败：'+result.errors.join(', '),'error');return;}state.advParams=result;closeAdvModal();updateTrainSummary();});$('#trainBtn').addEventListener('click',startTraining);}
 async function startTraining(){
   if(!state.selectedBatch){toast('请先上传数据集并选择批次','error');return;}
   $('#trainBtn').disabled=true;$('#trainProgress').classList.add('show');$('#tpTotalEpoch').textContent=state.advParams.yolo_epochs||_TRAIN_DEFAULTS.yolo_epochs;$('#tpEpoch').textContent='0';$('#tpPct').textContent='0%';$('#tpFill').style.width='0%';$('#tpLoss').textContent='—';$('#tpValLoss').textContent='—';$('#tpAcc').textContent='—';$('#tpStage').textContent='准备中';
@@ -577,7 +597,12 @@ function setupInfBatch(){var sel=$('#infBatchSelect'),inp=$('#infBatchInput');se
 async function runInfPredict(){
   if(!state.infSelectedModel||!state.infSelectedWeight){toast('请先选择模型和权重','error');return;}
   if(!state.infBatchName){toast('请选择或输入数据批次','error');return;}
-  var overlay=$('#scanOverlay');$('#scanLabel').textContent='正在执行缺陷检测…';overlay.classList.add('show');
+  var overlay=$('#scanOverlay');
+  var infModelName=(state.infModels.find(function(m){return m.id===state.infSelectedModel;})||{}).name||state.infSelectedModel;
+  var infWeightName=(state.infWeights.find(function(w){return w.id===state.infSelectedWeight;})||{}).name||state.infSelectedWeight;
+  $('#scanLabel').textContent='正在执行缺陷检测…';
+  $('#scanSub').textContent=infModelName+' · '+infWeightName+' · 批次: '+state.infBatchName;
+  overlay.classList.add('show');
   try{var sseResult=await submitTask(state.infBatchName,state.infSelectedWeight);var t=await API.task(sseResult.task_id);state.infResults=t.results||[];overlay.classList.remove('show');renderInfResults();toast('检测完成，共 '+(state.infResults?state.infResults.length:0)+' 项结果','success');}catch(e){overlay.classList.remove('show');toast('检测失败: '+e.message,'error');}
 }
 function renderInfResults(){
@@ -606,7 +631,12 @@ function setupInfSingleImage(){
     try{
       var zip=new JSZip();zip.file(state.singleImageFile.name,state.singleImageFile);var zipBlob=await zip.generateAsync({type:'blob'});var zipFile=new File([zipBlob],'single_image.zip',{type:'application/zip'});
       var fd=new FormData();fd.append('images_zip',zipFile);var uploadResult=await API.datasetUpload(fd);var batchId=uploadResult.batch_id||'batch_'+Date.now().toString(36);
-      var overlay=$('#scanOverlay');$('#scanLabel').textContent='正在识别图片…';$('#scanSub').textContent='图片: '+state.singleImageFile.name;overlay.classList.add('show');
+      var overlay=$('#scanOverlay');
+      var siModelName=(state.infModels.find(function(m){return m.id===state.infSelectedModel;})||{}).name||state.infSelectedModel;
+      var siWeightName=(state.infWeights.find(function(w){return w.id===state.infSelectedWeight;})||{}).name||state.infSelectedWeight;
+      $('#scanLabel').textContent='正在识别图片…';
+      $('#scanSub').textContent=siModelName+' · '+siWeightName+' · '+state.singleImageFile.name;
+      overlay.classList.add('show');
       try{var sseResult=await submitTask(batchId,state.infSelectedWeight);var t=await API.task(sseResult.task_id);var results=t.results||[];overlay.classList.remove('show');
         if(results.length>0){var r=results[0],v=r.verdict||'normal',conf=r.confidence||0,cp=(conf*100).toFixed(1),vCls=v==='critical'?'crit':v==='defect'?'warn':'ok',vTxt=v==='defect'?(r.severity==='critical'?'严重缺陷':'缺陷'):'正常';verdict.textContent='判读结果: '+vTxt;verdict.className='single-img-verdict '+vCls;detail.textContent='置信度 '+cp+'%'+(r.defect_type?' · 类型: '+r.defect_type:'');resultDiv.style.display='flex';toast('识别完成: '+vTxt+' (置信度 '+cp+'%)',v==='defect'||v==='critical'?'info':'success');}
         else toast('识别完成，未获取到结果','info');
@@ -690,8 +720,9 @@ async function refreshDatasets() {
     const data = await API.datasets();
     const items = (data.dataset || []).map(d => ({
       batch_id: d.id, uploaded_at: null, can_train: !!d.can_train,
-      images_file: d.size_kb != null ? { name: 'images.zip', size_kb: d.size_kb, image_count: 0 } : null,
-      annotation_file: d.can_train ? { name: 'annotations.json', size_kb: 0 } : null, masks_file: null,
+      images_file: d.size_kb != null ? { name: 'images.zip', size_kb: d.size_kb, image_count: d.image_count || 0 } : null,
+      annotation_file: d.has_annotation ? { name: 'annotations.json', size_kb: 0 } : null,
+      masks_file: d.masks_info || null,
     }));
     state.batches = items;
     renderDatasetList(); updateStats(); updateTrainSummary(); checkReady(); refreshBatches();
