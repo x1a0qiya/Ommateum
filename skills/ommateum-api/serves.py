@@ -47,7 +47,7 @@ def get_models() -> dict:
         return {
             'status': 'ok',
             'timestamp': get_datetime(),
-            'data': configs
+            'data': configs['data']
         }
     except Exception as e:
         return {
@@ -59,11 +59,13 @@ def get_models() -> dict:
 def get_weights(model_id: str | None) -> dict:
     try:
         configs = api_utils.get_model_configs(WEIGHTS_DIR, model_id=model_id)
-        configs['model_id'] = model_id
         return {
             'status': 'ok',
             'timestamp': get_datetime(),
-            'data': configs
+            'data': {
+                'models': configs['data']['models'],
+                'model_id': model_id
+            }
         }
     except Exception as e:
         return {

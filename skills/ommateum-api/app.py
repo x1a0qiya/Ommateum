@@ -1,8 +1,9 @@
-from flask import Flask, request, jsonify, send_file, Response
+from flask import Flask, request, jsonify, send_file, send_from_directory, Response
 from flask_cors import CORS
 import os
 
 import serves
+import logger_config
 
 app = Flask(__name__, static_folder='', static_url_path='')
 CORS(app)
@@ -29,8 +30,13 @@ def api_images():
     name = request.args.get('name')
     return jsonify(serves.get_images(name))
 
-@app.route('/api/dataset', method=['GET'])
-def get_dataset():
+@app.route('/api/dataset', methods=['GET', 'POST'])
+def handle_dataset():
+    if request.method == 'POST':
+        images_zip = request.files.get('images_zip')
+        annotation_json = request.files.get('annotation_json')
+        masks_zip = request.files.get('masks_zip')
+        return jsonify(serves.upload_zip(images_zip, annotation_json, masks_zip))
     return jsonify(serves.get_dataset())
 
 @app.route('/api/stats', methods=['GET'])
@@ -111,6 +117,29 @@ def export_task(task_id):
         as_attachment=True,
         download_name=f"task_{task_id}.zip"
     )
+
+# ==================== 静态文件服务 ====================
+# 由于 static_folder='' 禁用了 Flask 默认静态文件处理，需显式路由
+@app.route('/js/<path:filename>')
+def serve_js(filename):
+    return send_from_directory('js', filename)
+
+@app.route('/css/<path:filename>')
+def serve_css(filename):
+    return send_from_directory('css', filename)
+
+
+# ==================== 错误日志 API ====================
+@app.route('/api/logs/errors', methods=['GET'])
+def get_error_logs():
+    limit = request.args.get('limit', 50, type=int)
+    return jsonify(logger_config.read_errors(limit))
+
+@app.route('/api/logs/errors', methods=['DELETE'])
+def clear_error_logs():
+    logger_config.clear_errors()
+    return jsonify({'status': 'ok', 'timestamp': serves.get_datetime()})
+
 
 @app.route('/')
 def index():
