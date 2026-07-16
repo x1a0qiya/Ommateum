@@ -238,6 +238,19 @@ def predict(data: str | None) -> dict:
             lora_path=sam2_lora_dir,
             output_mask_path=masks_dir,
             project=batch_dir,
+            # 以下为 segment() 需要的其余参数默认值
+            yolo_output_dir=os.path.join(batch_dir, 'labels'),
+            conf=0.25,
+            iou=0.7,
+            device='cpu',
+            sam2_model_path='facebook/sam2-hiera-tiny',
+            model_type='ultralytics',
+            model_confidence_threshold=0.5,
+            slice_height=256,
+            slice_width=256,
+            overlap_height_ratio=0.2,
+            overlap_width_ratio=0.2,
+            name='exp'
         )
 
         api_utils.update_namespace_from_dict(
@@ -246,7 +259,16 @@ def predict(data: str | None) -> dict:
             keys_to_update=[
                 'conf',
                 'iou',
-                'imgsz'
+                'imgsz',
+                'device',
+                'yolo_output_dir',
+                'sam2_model_path',
+                'model_type',
+                'model_confidence_threshold',
+                'slice_height',
+                'slice_width',
+                'overlap_height_ratio',
+                'overlap_width_ratio',
             ]
         )   
 
@@ -267,7 +289,7 @@ def predict(data: str | None) -> dict:
         thread.start()
 
         return {
-            'status': 'ok',
+            'status': 'processing',
             'timestamp': get_datetime(),
             'data': {
                 'task_id': task_id,
@@ -364,6 +386,7 @@ def train(data: str | None) -> dict:
             data_yaml=data_yaml_path,
             weights_output_path=yolo_path,
             id=task_id,
+            name=task_id,
             weights_dir=weights_dir,
             device='cuda' if __import__('torch').cuda.is_available() else 'cpu',
         )
@@ -408,7 +431,7 @@ def train(data: str | None) -> dict:
         thread.start()
 
         return {
-            'status': 'ok',
+            'status': 'processing',
             'timestamp': get_datetime(),
             'data': {
                 'task_id': task_id,
