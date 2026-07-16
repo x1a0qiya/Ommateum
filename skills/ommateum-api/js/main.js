@@ -186,6 +186,8 @@
   const COUNT = 80;          // 粒子数量
   const MAX_DIST = 150;      // 连线最大距离 (px)
   const SPEED = 0.35;        // 粒子移动速度
+  const DAMPING = 0.999;     // 每帧速度衰减系数
+  const MIN_SPEED = 0.35;    // 衰减下限（低于此速度不再衰减）
   const MOUSE_RADIUS = 200;  // 鼠标影响半径
 
   // ---- DPR 适配 ----
@@ -220,6 +222,15 @@
       this.alpha = 0.35 + Math.random() * 0.35; // 0.35~0.70
     }
     update() {
+      // 速度衰减：每帧乘以阻尼系数，但不低于下限
+      const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+      if (speed > MIN_SPEED) {
+        const decayed = speed * DAMPING;
+        const newSpeed = Math.max(decayed, MIN_SPEED);
+        const ratio = newSpeed / speed;
+        this.vx *= ratio;
+        this.vy *= ratio;
+      }
       this.x += this.vx;
       this.y += this.vy;
       // 边界回弹
