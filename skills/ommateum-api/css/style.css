@@ -608,7 +608,7 @@ aside .btn { font-size: 15px; padding: 14px 22px; }
 .dataset-card.disabled { opacity: 0.55; cursor: not-allowed; border-color: var(--severe-soft); }
 .dataset-card.disabled:hover { border-color: var(--severe); box-shadow: none; }
 .dataset-card .dc-warn { margin-top: 8px; padding: 6px 10px; background: var(--severe-soft); border-radius: var(--r-sm); color: var(--severe); font-size: 12px; font-weight: 500; line-height: 1.4; }
-.dataset-card.disabled .dc-header { pointer-events: none; }
+/* 不使用 pointer-events: none，由 JS 控制点击逻辑以允许删除按钮可用 */
 
 /* Results toolbar */
 .results-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
