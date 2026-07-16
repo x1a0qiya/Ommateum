@@ -221,10 +221,23 @@ def generate_data_yaml(
             val_img_abspath = val_img_dir
             val_lbl_abspath = val_lbl_dir
         else:
-            train_img_abspath = images
-            train_lbl_abspath = labels
-            val_img_abspath = images
-            val_lbl_abspath = labels
+            # val_split == 0，仍生成 train/ 目录结构，主程序对路径敏感
+            train_img_dir = os.path.join(output_dir, "train", "images")
+            train_lbl_dir = os.path.join(output_dir, "train", "labels")
+            os.makedirs(train_img_dir, exist_ok=True)
+            os.makedirs(train_lbl_dir, exist_ok=True)
+
+            img_files = sorted(
+                f for f in os.listdir(images)
+                if f.lower().endswith((".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"))
+            )
+            _copy_files(images, labels, img_files, train_img_dir, train_lbl_dir)
+
+            train_img_abspath = train_img_dir
+            train_lbl_abspath = train_lbl_dir
+            val_img_abspath = train_img_dir
+            val_lbl_abspath = train_lbl_dir
+            print(f"[val_split=0] 已生成 train/ 目录结构: train={len(img_files)} 张")
 
     # ── 生成 YAML ──
     yaml_content = f"""# Auto-generated data.yaml for YOLO training
