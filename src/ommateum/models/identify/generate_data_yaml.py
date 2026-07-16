@@ -44,7 +44,7 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
 
 def generate_data_yaml(
     output: str,
-    names: List[str],
+    names: Optional[List[str]] = None,
     train_images: Optional[str] = None,
     train_labels: Optional[str] = None,
     val_images: Optional[str] = None,
@@ -59,7 +59,7 @@ def generate_data_yaml(
 
     Args:
         output: 输出的 data.yaml 文件路径。
-        names: 类别名称列表。
+        names: 类别名称列表，None 时自动从 labels/ 推断。
         train_images / train_labels: 模式 B — 手动指定 train 集路径。
         val_images / val_labels: 模式 B — 手动指定 val 集路径。
         images / labels: 模式 C — 统一目录，通过 val_split 自动划分。
@@ -71,13 +71,25 @@ def generate_data_yaml(
     output_dir = os.path.dirname(output)
     os.makedirs(output_dir, exist_ok=True)
 
-    # ── 推断 masks 目录 ──
-    if masks is None and images:
-        inferred = os.path.join(os.path.dirname(os.path.abspath(images)), "masks")
-        masks = inferred if os.path.isdir(inferred) else None
-    elif masks is not None and not os.path.isdir(masks):
-        print(f"[WARN] masks 目录不存在，跳过: {masks}")
+    # ── 推断 labels / masks 目录（标准结构：images/ labels/ masks/ 同级）──
+    if images:
+        parent = os.path.dirname(os.path.abspath(images))
+        if labels is None:
+            inferred_lbl = os.path.join(parent, "labels")
+            labels = inferred_lbl if os.path.isdir(inferred_lbl) else None
+        if masks is None:
+            inferred_msk = os.path.join(parent, "masks")
+            masks = inferred_msk if os.path.isdir(inferred_msk) else None
+    if labels is not None and not os.path.isdir(labels):
+        print(f"[WARN] labels 目录不存在: {labels}")
+        labels = None
+    if masks is not None and not os.path.isdir(masks):
+        print(f"[WARN] masks 目录不存在: {masks}")
         masks = None
+
+    # ── 推断类别名称（扫描 labels/ 中所有 class_id，自动编号）──
+    if not names:
+        names = _infer_names(labels) if labels else []
 
     # ── 模式 B: 手动指定 train/val ──
     if train_images and train_labels:
@@ -87,8 +99,10 @@ def generate_data_yaml(
         val_lbl_abspath = os.path.abspath(val_labels) if val_labels else train_lbl_abspath
     else:
         # ── 模式 C: 统一目录 + 自动划分 ──
-        if not images or not labels:
-            raise ValueError("必须提供 --images/--labels 或 --train_images/--train_labels")
+        if not images:
+            raise ValueError("必须提供 --images 或 --train_images/--train_labels")
+        if not labels:
+            raise ValueError("labels 目录未找到，请手动指定 --labels")
         images = os.path.abspath(images)
         labels = os.path.abspath(labels)
 
@@ -206,6 +220,35 @@ def _split_train_val(
     return train_img_dir, val_img_dir, train_lbl_dir, val_lbl_dir
 
 
+def _infer_names(labels_dir: Optional[str]) -> List[str]:
+    """扫描 labels/ 目录，收集所有 class_id 并自动编号。
+
+    Returns:
+        ["class_0", "class_1", ...] 或空列表。
+    """
+    if not labels_dir or not os.path.isdir(labels_dir):
+        return []
+    max_id = -1
+    for fname in os.listdir(labels_dir):
+        if not fname.endswith(".txt"):
+            continue
+        with open(os.path.join(labels_dir, fname), "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split()
+                if len(parts) >= 5:
+                    cid = int(parts[0])
+                    if cid > max_id:
+                        max_id = cid
+    if max_id < 0:
+        return []
+    names = [f"class_{i}" for i in range(max_id + 1)]
+    print(f"[推断类别] 从 labels/ 扫描到 {max_id + 1} 个类别: {names}")
+    return names
+
+
 def _copy_files(
     src_img: str,
     src_lbl: str,
@@ -263,11 +306,9 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
 
-    if not args.names:
-        raise ValueError("--names 不能为空")
-    names_list = [n.strip() for n in args.names.split(",") if n.strip()]
-    if not names_list:
-        raise ValueError("--names 不能为空")
+    names_list = None
+    if args.names:
+        names_list = [n.strip() for n in args.names.split(",") if n.strip()]
 
     generate_data_yaml(
         output=args.output,
