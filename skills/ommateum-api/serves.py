@@ -15,59 +15,6 @@ DATASET_DIR = os.path.join(api_utils.get_root_dir(), 'dataset')
 task_events = {} #{ task_id: { "event": threading.Event(), "status": "processing", "error": None, "task": "train" } }
 
 
-DEFAULT_WEIGHT_ID = "yolov11"
-DEFAULT_WEIGHT_CONFIG = {
-    "id": DEFAULT_WEIGHT_ID,
-    "name": "YOLOv11",
-    "description": "轻量级实时目标检测",
-    "architecture": "Ultralytics YOLOv11",
-    "input_size": [640, 640],
-    "size_mb": 5.4,
-    "accuracy": 0.952,
-    "trained": False,
-}
-
-
-def ensure_default_weights():
-    """如果权重目录为空，自动下载 yolo11n.pt 并创建默认权重结构。"""
-    os.makedirs(WEIGHTS_DIR, exist_ok=True)
-
-    # 检查是否已有权重配置
-    has_configs = False
-    for d in os.listdir(WEIGHTS_DIR):
-        sub = os.path.join(WEIGHTS_DIR, d)
-        if os.path.isdir(sub) and os.path.isfile(os.path.join(sub, 'config.json')):
-            has_configs = True
-            break
-
-    if has_configs:
-        return
-
-    print("[INFO] 权重目录为空，准备下载默认权重 yolo11n.pt ...")
-
-    weight_dir = os.path.join(WEIGHTS_DIR, DEFAULT_WEIGHT_ID)
-    yolo_dir = os.path.join(weight_dir, 'yolo')
-    os.makedirs(yolo_dir, exist_ok=True)
-
-    # 下载 yolo11n.pt
-    pt_path = os.path.join(yolo_dir, f'{DEFAULT_WEIGHT_ID}_best.pt')
-    try:
-        from ultralytics.utils.downloads import attempt_download_asset
-        cached = attempt_download_asset('yolo11n.pt')
-        shutil.copy2(cached, pt_path)
-        pt_size = round(os.path.getsize(pt_path) / (1024 * 1024), 1)
-        print(f"[INFO] 默认权重已下载: {pt_path} ({pt_size} MB)")
-    except Exception as e:
-        print(f"[WARN] 默认权重下载失败: {e}")
-        # 创建空文件以保持系统正常工作
-        open(pt_path, 'wb').close()
-
-    # 写入 config.json
-    with open(os.path.join(weight_dir, 'config.json'), 'w', encoding='utf-8') as f:
-        json.dump(DEFAULT_WEIGHT_CONFIG, f, ensure_ascii=False, indent=2)
-    print(f"[INFO] 默认权重配置已创建: {os.path.join(weight_dir, 'config.json')}")
-
-
 def get_api() -> dict:
     ...
 
@@ -83,7 +30,8 @@ def health_check() -> dict:
                 "version": "1.0.0",
                 "models": 1,
                 "images": img_num,
-                "trained_weights": weights_num
+                "trained_weights": weights_num,
+                "rag_available": True
             }
         }
     except Exception as e:
@@ -110,11 +58,44 @@ def get_models() -> dict:
 
 def get_weights(model_id: str | None) -> dict:
     try:
-        configs = api_utils.get_model_configs(WEIGHTS_DIR, model_id=model_id)
+        if model_id is None:
+            return {
+                'status': 'error',
+                'timestamp': get_datetime(),
+                'error': 'model_id is required'
+            }
+
+        model_dir = Path(WEIGHTS_DIR) / model_id
+        if not model_dir.is_dir():
+            return {
+                'status': 'ok',
+                'timestamp': get_datetime(),
+                'data': {'models': [], 'model_id': model_id}
+            }
+
+        # Scan for .pt weight files in the model directory
+        total_bytes = 0
+        has_pt = False
+        for pt_file in model_dir.rglob('*.pt'):
+            has_pt = True
+            total_bytes += pt_file.stat().st_size
+
+        weights = []
+        if has_pt:
+            weights.append({
+                'id': model_id,
+                'name': model_id,
+                'size_mb': round(total_bytes / (1024 * 1024), 1),
+                'trained': False
+            })
+
         return {
             'status': 'ok',
             'timestamp': get_datetime(),
-            'data': configs['data']
+            'data': {
+                'models': weights,
+                'model_id': model_id
+            }
         }
     except Exception as e:
         return {
@@ -290,8 +271,7 @@ def predict(data: str | None) -> dict:
             "event": threading.Event(),
             "status": "processing",
             "error": None,
-            "task": "test",
-            "batch_name": data.get('batch_name'),
+            "task": "test"
         }
         
         thread = threading.Thread(
@@ -414,8 +394,7 @@ def train(data: str | None) -> dict:
             "event": threading.Event(),
             "status": "processing",
             "error": None,
-            "task": "train",
-            "batch_name": data.get('batch_name'),
+            "task": "train"
         }
         
         thread = threading.Thread(
@@ -460,159 +439,3 @@ def pack_directory_to_temp_zip(task_id: str) -> str:
     )
 
     return temp_zip_path
-
-
-# ── 统计数据 ──
-def get_stats() -> dict:
-    try:
-        weights_num = api_utils.count_path_items(WEIGHTS_DIR)
-        batch_names = [d for d in os.listdir(DATASET_DIR)
-                       if os.path.isdir(os.path.join(DATASET_DIR, d))]
-        recent_accuracy = 0.0
-        return {
-            'status': 'ok',
-            'timestamp': get_datetime(),
-            'data': {
-                'recent_accuracy': recent_accuracy,
-                'trained_weights': weights_num,
-                'total_batches': len(batch_names),
-            }
-        }
-    except Exception as e:
-        return {
-            'status': 'error',
-            'timestamp': get_datetime(),
-            'error': repr(e)
-        }
-
-
-# ── 任务状态（JSON 版，供前端 API.task() 调用）──
-def get_task_status(task_id: str) -> dict:
-    try:
-        if task_id not in task_events:
-            return {
-                'status': 'error',
-                'timestamp': get_datetime(),
-                'error': f'Task {task_id} not found.'
-            }
-
-        info = task_events[task_id]
-        status = info["status"]
-        error = info.get("error")
-        task_type = info.get("task", "test")
-
-        result = {
-            'status': 'ok',
-            'timestamp': get_datetime(),
-            'data': {
-                'task_id': task_id,
-                'status': status,
-                'task_type': task_type,
-                'error': error,
-                'results': [],
-            }
-        }
-
-        # 对于已完成的检测任务，尝试从批次目录读取检测结果
-        if status == 'completed' and task_type == 'test':
-            # 从 task_events 中找 batch_name（存储在 predict 创建的事件中）
-            batch_name = info.get('batch_name')
-            if batch_name:
-                exp_dir = os.path.join(DATASET_DIR, batch_name, 'exp')
-                anno_path = os.path.join(exp_dir, 'annotations.json')
-                if os.path.exists(anno_path):
-                    with open(anno_path, 'r', encoding='utf-8') as f:
-                        coco_data = json.load(f)
-                    # 转换为前端期望的 results 格式
-                    results = []
-                    for ann in coco_data.get('annotations', []):
-                        img_info = next(
-                            (img for img in coco_data.get('images', [])
-                             if img['id'] == ann['image_id']),
-                            None
-                        )
-                        results.append({
-                            'image_name': img_info['file_name'] if img_info else f'img_{ann["image_id"]}',
-                            'verdict': 'defect' if ann.get('score', 0) > 0.3 else 'normal',
-                            'confidence': ann.get('score', 0),
-                            'defect_type': ann.get('category_id', 'unknown'),
-                            'bbox': ann.get('bbox', []),
-                        })
-                    result['data']['results'] = results
-
-        return result
-    except Exception as e:
-        return {
-            'status': 'error',
-            'timestamp': get_datetime(),
-            'error': repr(e)
-        }
-
-
-# ── 训练状态（JSON 版）──
-def get_train_status(task_id: str) -> dict:
-    try:
-        if task_id not in task_events:
-            return {
-                'status': 'error',
-                'timestamp': get_datetime(),
-                'error': f'Training task {task_id} not found.'
-            }
-
-        info = task_events[task_id]
-        return {
-            'status': 'ok',
-            'timestamp': get_datetime(),
-            'data': {
-                'task_id': task_id,
-                'status': 'done' if info['status'] == 'completed' else info['status'],
-                'progress': 1.0 if info['status'] == 'completed' else 0.0,
-                'current_epoch': 0,
-                'stage': 'completed' if info['status'] == 'completed' else info['status'],
-                'loss': None,
-                'val_loss': None,
-                'accuracy': 1.0 if info['status'] == 'completed' else 0.0,
-                'final_accuracy': 1.0 if info['status'] == 'completed' else 0.0,
-                'error': info.get('error'),
-            }
-        }
-    except Exception as e:
-        return {
-            'status': 'error',
-            'timestamp': get_datetime(),
-            'error': repr(e)
-        }
-
-
-# ── 训练历史 ──
-def get_training_history() -> dict:
-    try:
-        tasks = []
-        for tid, info in task_events.items():
-            if info.get('task') == 'train':
-                tasks.append({
-                    'id': tid,
-                    'status': 'done' if info['status'] == 'completed' else info['status'],
-                    'accuracy': 1.0 if info['status'] == 'completed' else 0.0,
-                    'epochs': 0,
-                    'normal_count': 0,
-                    'defect_count': 0,
-                    'model': 'yolo',
-                    'weight_id': tid,
-                    'timestamp': get_datetime(),
-                })
-        return {
-            'status': 'ok',
-            'timestamp': get_datetime(),
-            'data': {
-                'tasks': tasks,
-            }
-        }
-    except Exception as e:
-        return {
-            'status': 'error',
-            'timestamp': get_datetime(),
-            'error': repr(e)
-        }
-
-

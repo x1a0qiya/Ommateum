@@ -374,6 +374,8 @@ const API = (function() {
     trainStatus:(id) => req('/train/' + encodeURIComponent(id)),
     trainHistory: () => req('/training-history'),
     exportUrl:  (id) => base + '/export/' + encodeURIComponent(id),
+    errorLogs:  (limit) => req('/logs/errors' + (limit ? '?limit=' + limit : '')),
+    clearErrors: () => req('/logs/errors', { method: 'DELETE' }),
   };
 })();
 
@@ -478,7 +480,8 @@ function renderModels() {
     const wrap = el('div', 't-tilt');
     const card = el('div', 'model-card t-tilt-card' + (state.selectedModel === m.id ? ' active' : ''));
     const abbr = (m.name || m.id).slice(0, 2).toUpperCase();
-    card.innerHTML = `<div class="mc-icon">${abbr}</div><div class="mc-body"><div class="mc-name">${m.name}</div><div class="mc-desc">${m.description || m.architecture || ''}</div></div><div class="mc-check"></div><div class="t-tilt-glare"></div>`;
+    const displayName = m.name || m.id;
+    card.innerHTML = `<div class="mc-icon">${abbr}</div><div class="mc-body"><div class="mc-name">${displayName}</div><div class="mc-desc">${m.description || m.architecture || ''}</div></div><div class="mc-check"></div><div class="t-tilt-glare"></div>`;
     card.addEventListener('click', () => selectModel(m.id));
     wrap.appendChild(card); grid.appendChild(wrap); makeTilt(wrap);
   });
@@ -548,12 +551,8 @@ function selectWeight(weightId) {
   state.selectedWeight = weightId; renderWeights(); checkReady();
 }
 
-/* ---- Ready check ---- */
-function checkReady() {
-  const btn = $('#predictBtn');
-  const ready = state.selectedModel && state.selectedWeight && state.selectedBatch && state.online;
-  btn.disabled = !ready;
-}
+/* ---- Ready check (not used — button removed) ---- */
+function checkReady() {}
 
 /* ---- Dataset Upload (batch zip) ---- */
 function setupDatasetUpload() {
@@ -705,7 +704,7 @@ async function submitTask(batchName, weight) {
   });
 }
 
-/* ---- Main workspace predict (SSE) ---- */
+/* ---- Predict (workspace) ---- */
 async function runPredict() {
   if (!state.selectedModel || !state.selectedWeight) { toast('请先选择模型和权重', 'error'); return; }
   if (!state.selectedBatch) { toast('请先上传数据集并选择批次', 'error'); return; }
@@ -1014,7 +1013,8 @@ function renderInfModels() {
   state.infModels.forEach((m) => {
     const wrap = el('div', 't-tilt');
     const card = el('div', 'model-card t-tilt-card' + (state.infSelectedModel === m.id ? ' active' : ''));
-    card.innerHTML = `<div class="mc-icon">${(m.name||'').slice(0,2).toUpperCase()}</div><div class="mc-body"><div class="mc-name">${m.name}</div><div class="mc-desc">${m.description||''}</div></div><div class="mc-check"></div><div class="t-tilt-glare"></div>`;
+    const name = m.name || m.id;
+    card.innerHTML = `<div class="mc-icon">${(name).slice(0,2).toUpperCase()}</div><div class="mc-body"><div class="mc-name">${name}</div><div class="mc-desc">${m.description||''}</div></div><div class="mc-check"></div><div class="t-tilt-glare"></div>`;
     card.addEventListener('click', () => selectInfModel(m.id));
     wrap.appendChild(card); grid.appendChild(wrap); makeTilt(wrap);
   });
@@ -1049,6 +1049,8 @@ function selectInfWeight(wid) {
 }
 function infCheckReady() {
   $('#infPredictBtn').disabled = !(state.infSelectedModel && state.infSelectedWeight && state.infBatchName && state.online);
+  var siBtn = $('#singleImagePredictBtn');
+  if (siBtn) siBtn.disabled = !(state.singleImageFile && state.infSelectedModel && state.infSelectedWeight && state.online);
 }
 
 /* Inference upload */
@@ -1087,8 +1089,96 @@ function renderInfResults() {
   state.infResults.forEach(r=>{
     var row=el('div','result-row'),v=r.verdict||'normal',conf=r.confidence||0,sc=v==='critical'?'crit':v==='defect'?'warn':'ok';
     var vTag=v==='defect'?(r.severity==='critical'?'严重缺陷':'缺陷'):'正常',cp=(conf*100).toFixed(1);
-    row.innerHTML='<div class="result-thumb">'+(r.image_name?`<div class="thumb-name">${r.image_name.slice(0,2)}</div>`:'')+'</div><div class="result-info"><div class="ri-name">'+(r.image_name||'')+'</div><div class="ri-detail">'+(r.defect_type?'类型: '+r.defect_type+' · ':'')+'置信度 '+cp+'%</div></div><div class="result-verdict"><div class="conf-bar"><div class="fill '+sc+'" style="width:'+cp+'%"></div></div><span class="verdict-tag '+sc+'">'+vTag+'</span></div>';
+    row.innerHTML='<div class="result-thumb">'+(r.image_name?`<div class="thumb-name">${r.image_name.slice(0,2)}</div>`:'')+'</div><div class="result-info"><div class="ri-name">'+(r.image_name||'')+(r.rag_similar?`<span class="rag-badge" title="ChromaDB 中检索到 '+r.rag_similar.length+' 条相似历史记录">RAG '+r.rag_similar.length+'</span>`:'')+'</div><div class="ri-detail">'+(r.defect_type?'类型: '+r.defect_type+' · ':'')+'置信度 '+cp+'%</div></div><div class="result-verdict"><div class="conf-bar"><div class="fill '+sc+'" style="width:'+cp+'%"></div></div><span class="verdict-tag '+sc+'">'+vTag+'</span></div>';
     list.appendChild(row);
+  });
+}
+
+/* ---- Single image recognition (page 3) ---- */
+function setupInfSingleImage() {
+  var zone = $('#zoneSingleImage'), input = $('#inputSingleImage'), btn = $('#singleImagePredictBtn');
+  var sub = $('#singleImageSub'), resultDiv = $('#singleImageResult');
+  var preview = $('#singleImagePreview'), verdict = $('#singleImageVerdict'), detail = $('#singleImageDetail');
+
+  state.singleImageFile = null;
+
+  zone.addEventListener('click', function () { input.click(); });
+  input.addEventListener('change', function () {
+    if (input.files.length) {
+      state.singleImageFile = input.files[0];
+      zone.classList.add('has-file');
+      var name = state.singleImageFile.name;
+      sub.textContent = name.length > 28 ? name.slice(0, 25) + '…' : name;
+      var reader = new FileReader();
+      reader.onload = function (e) { preview.src = e.target.result; };
+      reader.readAsDataURL(state.singleImageFile);
+      resultDiv.style.display = 'none';
+    } else {
+      state.singleImageFile = null;
+      zone.classList.remove('has-file');
+      sub.textContent = '点击选择单张图片';
+    }
+    input.value = '';
+    infCheckReady();
+  });
+
+  btn.addEventListener('click', async function () {
+    if (!state.singleImageFile) { toast('请先选择图片', 'error'); return; }
+    if (!state.infSelectedModel || !state.infSelectedWeight) { toast('请先选择模型和权重', 'error'); return; }
+
+    btn.disabled = true; btn.textContent = '上传识别中…';
+
+    try {
+      // Step 1: Create zip with single image using JSZip
+      var zip = new JSZip();
+      zip.file(state.singleImageFile.name, state.singleImageFile);
+      var zipBlob = await zip.generateAsync({ type: 'blob' });
+      var zipFile = new File([zipBlob], 'single_image.zip', { type: 'application/zip' });
+
+      // Step 2: Upload via dataset endpoint
+      var fd = new FormData();
+      fd.append('images_zip', zipFile);
+      var uploadResult = await API.datasetUpload(fd);
+      var batchId = uploadResult.batch_id || 'batch_' + Date.now().toString(36);
+
+      // Step 3: Run prediction via SSE
+      var overlay = $('#scanOverlay');
+      $('#scanLabel').textContent = '正在识别图片…';
+      $('#scanSub').textContent = '图片: ' + state.singleImageFile.name;
+      overlay.classList.add('show');
+
+      try {
+        var sseResult = await submitTask(batchId, state.infSelectedWeight);
+        var t = await API.task(sseResult.task_id);
+        var results = t.results || [];
+        overlay.classList.remove('show');
+
+        if (results.length > 0) {
+          var r = results[0];
+          var v = r.verdict || 'normal';
+          var conf = r.confidence || 0;
+          var cp = (conf * 100).toFixed(1);
+          var vCls = v === 'critical' ? 'crit' : v === 'defect' ? 'warn' : 'ok';
+          var vTxt = v === 'defect' ? (r.severity === 'critical' ? '严重缺陷' : '缺陷') : '正常';
+
+          verdict.textContent = '判读结果: ' + vTxt;
+          verdict.className = 'single-img-verdict ' + vCls;
+          detail.textContent = '置信度 ' + cp + '%' + (r.defect_type ? ' · 类型: ' + r.defect_type : '');
+          resultDiv.style.display = 'flex';
+          toast('识别完成: ' + vTxt + ' (置信度 ' + cp + '%)', v === 'defect' || v === 'critical' ? 'info' : 'success');
+        } else {
+          toast('识别完成，未获取到结果', 'info');
+        }
+      } catch (e) {
+        overlay.classList.remove('show');
+        toast('识别失败: ' + e.message, 'error');
+      }
+    } catch (e) {
+      toast('上传图片失败: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '执行单张识别';
+    }
   });
 }
 
@@ -1101,6 +1191,81 @@ async function loadStats() {
     }
     if (data.trained_weights != null) $('#statTrained').textContent = data.trained_weights;
   } catch (e) { /* silent */ }
+}
+
+/* ---- Error log viewer ---- */
+async function loadErrors() {
+  try {
+    var data = await API.errorLogs(50);
+    var errors = data.errors || [];
+    var el = $('#errIndicator');
+    if (errors.length > 0) {
+      el.style.display = 'flex';
+      $('#errCount').textContent = errors.length > 99 ? '99+' : errors.length;
+    } else {
+      el.style.display = 'none';
+    }
+  } catch (e) { /* silent */ }
+}
+
+function renderErrorModal() {
+  API.errorLogs(50).then(function (data) {
+    var errors = data.errors || [];
+    var body = $('#errModalBody');
+    $('#errModalTotal').textContent = '共 ' + data.total + ' 条';
+
+    if (errors.length === 0) {
+      body.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-3);">暂无错误记录</div>';
+      return;
+    }
+
+    var html = '<table class="err-table"><thead><tr><th>时间</th><th>类型</th><th>错误信息</th><th>端点</th><th>Traceback</th></tr></thead><tbody>';
+    errors.forEach(function (e) {
+      var ts = e.timestamp ? new Date(e.timestamp).toLocaleString('zh-CN') : '—';
+      var tb = e.traceback && e.traceback.length > 0 ? e.traceback.slice(-2).join('\n') : '';
+      html += '<tr>' +
+        '<td class="err-ts">' + ts + '</td>' +
+        '<td class="err-type">' + (e.error_type || '—') + '</td>' +
+        '<td class="err-msg" title="' + (e.error_message || '').replace(/"/g, '&quot;') + '">' + (e.error_message || '—') + '</td>' +
+        '<td class="err-ts">' + (e.method || '') + ' ' + (e.endpoint || '—') + '</td>' +
+        '<td class="err-tb" title="' + tb.replace(/"/g, '&quot;') + '">' + (tb ? tb.replace(/\n/g, ' › ') : '—') + '</td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+    body.innerHTML = html;
+  }).catch(function () {
+    $('#errModalBody').innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-3);">加载失败</div>';
+  });
+}
+
+function setupErrorModal() {
+  $('#errIndicator').addEventListener('click', function () { openErrModal(); });
+  $('#errClose').addEventListener('click', closeErrModal);
+  $('#errModal').addEventListener('click', function (e) { if (e.target === $('#errModal')) closeErrModal(); });
+  $('#errClearBtn').addEventListener('click', function () {
+    API.clearErrors().then(function () {
+      renderErrorModal();
+      loadErrors();
+      toast('错误日志已清空', 'success');
+    }).catch(function () { toast('清空失败', 'error'); });
+  });
+}
+
+function openErrModal() {
+  var m = $('#errModal');
+  m.style.display = 'flex';
+  var modal = m.querySelector('.t-modal');
+  modal.classList.remove('is-closing');
+  requestAnimationFrame(function () { modal.classList.add('is-open'); });
+  renderErrorModal();
+}
+function closeErrModal() {
+  var m = $('#errModal');
+  var modal = m.querySelector('.t-modal');
+  var closeMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur')) || 150;
+  modal.classList.remove('is-open');
+  modal.classList.add('is-closing');
+  setTimeout(function () { modal.classList.remove('is-closing'); m.style.display = 'none'; }, closeMs);
 }
 
 /* ---- Scroll reveal ---- */
@@ -1251,8 +1416,9 @@ async function init() {
   setupTrainingControls();
   setupReveal();
   setupMultiScreenScroll();
-  $('#predictBtn').addEventListener('click', runPredict);
+  setupErrorModal();
   setupInfBatch();
+  setupInfSingleImage();
   $('#infPredictBtn').addEventListener('click', runInfPredict);
 
   // 入场动画结束后启动打字机效果
@@ -1262,13 +1428,16 @@ async function init() {
   if (online) {
     await Promise.all([loadModels(), loadTrainingHistory(), loadStats(), loadInfModels()]);
     refreshDatasets();
+    loadErrors();
   } else {
     toast('API 后端未连接，请启动后端服务', 'error');
     $('#modelHint').textContent = '离线';
   }
   checkReady();
+  infCheckReady();
   updateTrainSummary();
   setInterval(checkApiStatus, 30000);
+  setInterval(loadErrors, 45000);
   setupClickBlur();
 }
 
