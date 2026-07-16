@@ -204,7 +204,7 @@ const API = (function() {
     let body;
     try { body = ct.includes('json') ? await res.json() : await res.text(); } catch(_) { body = null; }
     if (!res.ok) throw new Error((body && body.error) || `HTTP ${res.status}`);
-    return (body && typeof body === 'object' && body.status === 'ok' && body.data !== undefined) ? body.data : body;
+    return (body && typeof body === 'object' && (body.status === 'ok' || body.status === 'processing') && body.data !== undefined) ? body.data : body;
   }
   return {
     health:     () => req('/health'),

@@ -290,7 +290,7 @@ def predict(data: str | None) -> dict:
         thread.start()
 
         return {
-            'status': 'processing',
+            'status': 'ok',
             'timestamp': get_datetime(),
             'data': {
                 'task_id': task_id,
@@ -449,7 +449,7 @@ def train(data: str | None) -> dict:
         thread.start()
 
         return {
-            'status': 'processing',
+            'status': 'ok',
             'timestamp': get_datetime(),
             'data': {
                 'task_id': task_id,
@@ -463,15 +463,14 @@ def train(data: str | None) -> dict:
         }
     
 def pack_directory_to_temp_zip(task_id: str) -> str:
-    if not task_id in task_events:
-        raise ValueError(f"Task id '{task_id}' is not exist.")
-
-    source_dir = os.path.join(
-        WEIGHTS_DIR if task_events[task_id]['task'] == 'train' else DATASET_DIR,
-        task_id
-    )
-    if not os.path.exists(source_dir) or not os.path.isdir(source_dir):
-        raise FileNotFoundError(f"Dir '{source_dir}' is not exist or is not a dir.")
+    # 优先尝试 WEIGHTS_DIR，若不存在则尝试 DATASET_DIR
+    source_dir = os.path.join(WEIGHTS_DIR, task_id)
+    if not os.path.isdir(source_dir):
+        source_dir = os.path.join(DATASET_DIR, task_id)
+    if not os.path.isdir(source_dir):
+        raise FileNotFoundError(
+            f"Task directory not found in either WEIGHTS_DIR or DATASET_DIR: {task_id}"
+        )
 
     temp_dir = tempfile.gettempdir()
     temp_zip_base = os.path.join(temp_dir, f"export_temp_{os.urandom(8).hex()}")
@@ -619,7 +618,7 @@ def get_training_history() -> dict:
                     'epochs': 0,
                     'normal_count': 0,
                     'defect_count': 0,
-                    'model': 'yolo',
+                    'model': tid,
                     'weight_id': tid,
                     'timestamp': get_datetime(),
                 })
