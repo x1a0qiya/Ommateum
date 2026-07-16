@@ -8,8 +8,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.ommateum.models.test import segment
 from src.ommateum.models.train import train_model
-from src.ommateum.models.identify.coco2yolo import coco2yolo
-from src.ommateum.models.identify.generate_data_yaml import generate_data_yaml
+from src.ommateum.utils.augment_dataset import sdg
+from src.ommateum.utils.coco2yolo import coco2yolo
+from src.ommateum.utils.generate_data_yaml import generate_data_yaml
 
 WEIGHTS_DIR = os.path.join(api_utils.get_root_dir(), 'weights')
 DATASET_DIR = os.path.join(api_utils.get_root_dir(), 'dataset')
@@ -361,14 +362,31 @@ def train(data: str | None) -> dict:
 
         count = api_utils.count_path_items(batch_dir)
         if count > 1 and count < 4:
-            coco2yolo_args = Namespace(
-                coco_json=json_name,
-                output=data_yaml_path,
-                val_split=0.2,
-                seed=42,
-            )
-            coco2yolo(coco2yolo_args)
+            coco2yolo(json_name)
 
+            if 'use_SDG' in data:
+                sdg_args = Namespace(
+                    images=images_dir,
+                    labels=None,
+                    masks=None,
+                    output=None,
+                    num_aug=3
+                )
+
+                api_utils.update_namespace_from_dict(
+                    args_obj=sdg_args,
+                    data_dict=params,
+                    keys_to_update=[
+                        'num_aug'
+                    ]
+                )                
+
+                sdg(sdg_args)
+
+            generate_data_yaml(
+                images=images_dir,
+                output=None #type: ignore
+            )
 
         train_dir = os.path.join(batch_dir, 'train')
         masks_dir = os.path.join(train_dir, 'masks')

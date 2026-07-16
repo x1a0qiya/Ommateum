@@ -437,7 +437,7 @@ def augment_dataset(
 
 # ── CLI 入口 ──
 
-if __name__ == "__main__":
+def parse_args():
     parser = argparse.ArgumentParser(
         description="YOLO 数据集数据增强（基于 albumentations）",
     )
@@ -471,7 +471,13 @@ if __name__ == "__main__":
         default=3,
         help="每张原图生成的增强变体数（默认 3）",
     )
-    args = parser.parse_args()
+    args = parser.parse_args()    
+    return args
+
+
+def sdg(args=None):
+    if args is None:
+        args = parse_args()
 
     augment_dataset(
         images_dir=args.images,
@@ -479,4 +485,7 @@ if __name__ == "__main__":
         masks_dir=args.masks,
         output_dir=args.output,
         num_aug=args.num_aug,
-    )
+    )    
+
+if __name__ == "__main__":
+    sdg()
