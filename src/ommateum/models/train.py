@@ -48,9 +48,50 @@ def parse_args():
     args = parser.parse_args()
     return args
 
+def get_default_train_args():
+    """返回所有训练参数的默认值 Namespace（不依赖 CLI 输入）。"""
+    parser = argparse.ArgumentParser(description='Sam2 Training Script (defaults only)')
+    parser.add_argument('--model_path', type=str, default='facebook/sam2-hiera-tiny')
+    parser.add_argument('--save_path', type=str, default='weights/sam2')
+    parser.add_argument('--image_dir', type=str, default='')
+    parser.add_argument('--label_dir', type=str, default='')
+    parser.add_argument('--mask_dir', type=str, default='')
+    parser.add_argument('--sam2_epochs', type=int, default=8)
+    parser.add_argument('--sam2_batch_size', type=int, default=8)
+    parser.add_argument('--lowvram', type=bool, default=False)
+    parser.add_argument('--lora_rank', type=int, default=16)
+    parser.add_argument('--use_dora', type=bool, default=True)
+    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
+    parser.add_argument('--sam2_lr', type=float, default=2e-4)
+    parser.add_argument('--weight_decay', type=float, default=1e-2)
+    parser.add_argument("--data_yaml", default="dataset/data.yaml")
+    parser.add_argument("--yolo_epochs", type=int, default=100)
+    parser.add_argument("--imgsz", type=int, default=640)
+    parser.add_argument("--yolo_batch_size", type=int, default=8)
+    parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--yolo_cache_path", default="runs/train")
+    parser.add_argument("--name", default="trained")
+    parser.add_argument("--patience", type=int, default=30)
+    parser.add_argument("--freeze", type=int, default=0)
+    parser.add_argument("--pretrained", default="yolo11n.pt")
+    parser.add_argument("--yolo_lr", type=float, default=0.001)
+    parser.add_argument("--lrf", type=float, default=0.1)
+    parser.add_argument("--cos_lr", type=bool, default=True)
+    parser.add_argument("--full_train", action="store_true")
+    parser.add_argument("--iou", type=float, default=0.7)
+    parser.add_argument("--weights_output_path", default=None)
+    return parser.parse_args([])
+
+
 def train_model(args=None):
     if args is None:
         args = parse_args()
+    else:
+        # 当通过 API 传入 Namespace 时，用默认值兜底缺失的属性
+        default_args = get_default_train_args()
+        for key, value in vars(args).items():
+            setattr(default_args, key, value)
+        args = default_args
 
     if args.full_train:
         train_yolo_model(

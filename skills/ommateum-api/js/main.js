@@ -536,7 +536,7 @@ function setupTrainingControls(){$('#advOptionsBtn').addEventListener('click',op
 async function startTraining(){
   if(!state.selectedBatch){toast('请先上传数据集并选择批次','error');return;}
   $('#trainBtn').disabled=true;$('#trainProgress').classList.add('show');$('#tpTotalEpoch').textContent=state.advParams.yolo_epochs||_TRAIN_DEFAULTS.yolo_epochs;$('#tpEpoch').textContent='0';$('#tpPct').textContent='0%';$('#tpFill').style.width='0%';$('#tpLoss').textContent='—';$('#tpValLoss').textContent='—';$('#tpAcc').textContent='—';$('#tpStage').textContent='准备中';
-  try{const d=await API.train({params:state.advParams,batch_name:state.selectedBatch});state.trainingTaskId=d.task_id;toast('训练已启动，预计 '+d.estimated_seconds+'s','info');pollTraining(d.task_id);}
+  try{const d=await API.train({params:state.advParams,batch_name:state.selectedBatch});if(!d||!d.task_id)throw new Error((d&&d.error)||'训练启动失败，未获取到任务ID');state.trainingTaskId=d.task_id;toast('训练已启动'+(d.estimated_seconds?', 预计 '+d.estimated_seconds+'s':''),'info');pollTraining(d.task_id);}
   catch(e){toast('训练启动失败：'+e.message,'error');$('#trainProgress').classList.remove('show');$('#trainBtn').disabled=false;}
 }
 async function pollTraining(taskId){

@@ -62,17 +62,23 @@ def get_model_configs(path: str, *, name: str | None = None, model_id: str | Non
     }
     total = 0
 
+    def _ensure_name(cfg: dict) -> dict:
+        """若 config.json 缺少 name 字段则用 id 回退，避免前端显示 undefined"""
+        if 'name' not in cfg or not cfg['name']:
+            cfg['name'] = cfg.get('id', 'unknown')
+        return cfg
+
     if name is None:
         for json_file in models_dir.glob('*/config.json'):
             with open(json_file, 'r', encoding='utf-8') as f:
                 config = json.load(f)
                 if model_id is None or config['id'] == model_id:
-                    configs['data']['models'].append(config)
+                    configs['data']['models'].append(_ensure_name(config))
                     total += 1
     else:
         with open(models_dir / name / 'config.json', 'r', encoding='utf-8') as f:
             config = json.load(f)
-            configs['data']['models'].append(config)
+            configs['data']['models'].append(_ensure_name(config))
             total = 1
     
     configs['total'] = total
