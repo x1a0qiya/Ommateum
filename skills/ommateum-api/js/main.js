@@ -730,4 +730,3 @@ async function refreshDatasets() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
-

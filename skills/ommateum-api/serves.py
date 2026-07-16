@@ -385,7 +385,7 @@ def train(data: str | None) -> dict:
 
             generate_data_yaml(
                 images=images_dir,
-                output=None #type: ignore
+                output=data_yaml_path
             )
 
         train_dir = os.path.join(batch_dir, 'train')
