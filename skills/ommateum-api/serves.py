@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+from ultralytics import YOLO
 from src.ommateum.models.test import segment
 from src.ommateum.models.train import train_model
 from src.ommateum.utils.augment_dataset import sdg
@@ -16,6 +17,43 @@ WEIGHTS_DIR = os.path.join(api_utils.get_root_dir(), 'weights')
 DATASET_DIR = os.path.join(api_utils.get_root_dir(), 'dataset')
 task_events = {} #{ task_id: { "event": threading.Event(), "status": "processing", "error": None, "task": "train" } }
 
+
+# ═══════════════════════════════════════════════════════════════
+#  启动预检：确保预训练权重存在
+# ═══════════════════════════════════════════════════════════════
+
+def ensure_pretrained():
+    """启动时检测 pretrained/ 目录，不存在则下载预训练模型并生成 config.json。"""
+    pretrained_dir = os.path.join(WEIGHTS_DIR, 'pretrained')
+    config_path = os.path.join(pretrained_dir, 'config.json')
+
+    if os.path.isfile(config_path):
+       
+        return
+
+    
+    os.makedirs(pretrained_dir, exist_ok=True)
+
+    # ── YOLO 预训练权重 ──
+    yolo_dir = os.path.join(pretrained_dir, 'yolo')
+    os.makedirs(yolo_dir, exist_ok=True)
+    w='yolo11n.pt'
+    dst = os.path.join(yolo_dir, w)
+    if not os.path.isfile(dst):
+        model = YOLO(w)  # ultralytics 自动下载到缓存
+        src = str(Path(model.ckpt_path) if hasattr(model, 'ckpt_path') and model.ckpt_path
+                    else os.path.join(os.path.expanduser('~'), '.cache', 'ultralytics', w))
+        if os.path.isfile(src) and src != dst:
+            shutil.copy2(src, dst)
+            
+
+    # ── 写入 config.json ──
+    config = {
+        "id": "pretrained",
+    }
+    with open(config_path, 'w', encoding='utf-8') as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+    print(f"[启动] config.json 已创建: {config_path}")
 
 def get_api() -> dict:
     ...
