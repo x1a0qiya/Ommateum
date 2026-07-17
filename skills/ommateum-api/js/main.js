@@ -263,7 +263,7 @@ const state = {
   datasetFiles: {}, trainingTaskId: null, trainingPollTimer: null,
   trainedHistory: [], advParams: {},
   infModels: [], infSelectedModel: null, infWeights: [], infSelectedWeight: null,
-  infBatchName: null, infResults: null,
+  infBatchName: null, infResults: null, infTaskId: null,
 };
 
 /* ---- DOM helpers ---- */
@@ -647,7 +647,7 @@ async function runInfPredict(){
   $('#scanLabel').textContent='正在执行缺陷检测…';
   $('#scanSub').textContent=infModelName+' · '+infWeightName+' · 批次: '+state.infBatchName;
   overlay.classList.add('show');
-  try{var sseResult=await submitTask(state.infBatchName,state.infSelectedWeight);var t=await API.task(sseResult.task_id);state.infResults=t.results||[];overlay.classList.remove('show');renderInfResults();toast('检测完成，共 '+(state.infResults?state.infResults.length:0)+' 项结果','success');}catch(e){overlay.classList.remove('show');toast('检测失败: '+e.message,'error');}
+  try{var sseResult=await submitTask(state.infBatchName,state.infSelectedWeight);var t=await API.task(sseResult.task_id);state.infTaskId=sseResult.task_id;state.infResults=t.results||[];overlay.classList.remove('show');renderInfResults();toast('检测完成，共 '+(state.infResults?state.infResults.length:0)+' 项结果','success');}catch(e){overlay.classList.remove('show');toast('检测失败: '+e.message,'error');}
 }
 function renderInfResults(){
   var tb=$('#infResultsToolbar'),empty=$('#infResultsEmpty'),list=$('#infResultsList');list.innerHTML='';
@@ -655,7 +655,7 @@ function renderInfResults(){
   var nd=state.infResults.filter(r=>r.verdict==='defect').length,nn=state.infResults.length-nd;
   var s=$('#infRtSummary');if(s)s.innerHTML='<span>共 <strong>'+state.infResults.length+'</strong> 张 · 缺陷 <strong style="color:var(--defect-dark)">'+nd+'</strong> 张 · 正常 <strong style="color:var(--normal-dark)">'+nn+'</strong> 张</span>';
   var eb=$('#infExportResultsBtn');if(eb)eb.onclick=()=>{var rpt={exported_at:new Date().toISOString(),model:state.infSelectedModel,weight:state.infSelectedWeight,batch:state.infBatchName,summary:{total:state.infResults.length,defect_count:nd,normal_count:nn},results:state.infResults};var blob=new Blob([JSON.stringify(rpt,null,2)],{type:'application/json'});var url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='detect_results_'+state.infBatchName+'.json';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);toast('结果已导出','success');};
-  var zb=$('#infExportZipBtn');if(zb)zb.onclick=()=>{var a=document.createElement('a');a.href='/api/export/'+encodeURIComponent(state.infBatchName);a.download='detect_results_'+state.infBatchName+'.zip';document.body.appendChild(a);a.click();document.body.removeChild(a);toast('压缩包下载已开始','success');};
+  var zb=$('#infExportZipBtn');if(zb)zb.onclick=()=>{var a=document.createElement('a');a.href='/api/export/'+encodeURIComponent(state.infTaskId);a.download='detect_results_'+state.infTaskId+'.zip';document.body.appendChild(a);a.click();document.body.removeChild(a);toast('压缩包下载已开始','success');};
   state.infResults.forEach(r=>{var row=el('div','result-row'),v=r.verdict||'normal',conf=r.confidence||0,sc=v==='critical'?'crit':v==='defect'?'warn':'ok';var vTag=v==='defect'?(r.severity==='critical'?'严重缺陷':'缺陷'):'正常',cp=(conf*100).toFixed(1);row.innerHTML='<div class="result-thumb">'+(r.image_name?`<img src="/api/preview/${encodeURIComponent(state.infBatchName)}/${encodeURIComponent(r.image_name)}" alt="${r.image_name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="display:block;"><div class="thumb-name" style="display:none;">${r.image_name.slice(0,2)}</div>`:'')+'</div><div class="result-info"><div class="ri-name">'+(r.image_name||'')+(r.rag_similar?`<span class="rag-badge" title="ChromaDB 中检索到 ${r.rag_similar.length} 条相似历史记录">RAG ${r.rag_similar.length}</span>`:'')+'</div><div class="ri-detail">'+(r.defect_type?'类型: '+r.defect_type+' · ':'')+'置信度 '+cp+'%</div></div><div class="result-verdict"><div class="conf-bar"><div class="fill '+sc+'" style="width:'+cp+'%"></div></div><span class="verdict-tag '+sc+'">'+vTag+'</span></div>';list.appendChild(row);});
 }
 
