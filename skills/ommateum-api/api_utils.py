@@ -62,17 +62,23 @@ def get_model_configs(path: str, *, name: str | None = None, model_id: str | Non
     }
     total = 0
 
+    def _ensure_name(cfg: dict) -> dict:
+        """若 config.json 缺少 name 字段则用 id 回退，避免前端显示 undefined"""
+        if 'name' not in cfg or not cfg['name']:
+            cfg['name'] = cfg.get('id', 'unknown')
+        return cfg
+
     if name is None:
         for json_file in models_dir.glob('*/config.json'):
             with open(json_file, 'r', encoding='utf-8') as f:
                 config = json.load(f)
                 if model_id is None or config['id'] == model_id:
-                    configs['data']['models'].append(config)
+                    configs['data']['models'].append(_ensure_name(config))
                     total += 1
     else:
         with open(models_dir / name / 'config.json', 'r', encoding='utf-8') as f:
             config = json.load(f)
-            configs['data']['models'].append(config)
+            configs['data']['models'].append(_ensure_name(config))
             total = 1
     
     configs['total'] = total
@@ -151,6 +157,74 @@ def scan_images_max_size(path: str, name: str) -> tuple:
             if meta:
                 mx = max(mx, (meta['width'], meta['height']))
     return mx
+
+def _get_folder_size(folder_path):
+    """计算文件夹的总大小（字节）"""
+    total_size = 0
+    try:
+        for dirpath, dirnames, filenames in os.walk(folder_path):
+            for f in filenames:
+                fp = os.path.join(dirpath, f)
+                if not os.path.islink(fp):
+                    total_size += os.path.getsize(fp)
+    except (PermissionError, FileNotFoundError):
+        pass
+    return total_size
+
+def get_all_dataset(path: str) -> dict:
+    """
+    返回已有的 dataset.
+
+    Args:
+        path (str) : dataset 路径.
+    Returns:
+        dict: dataset 字典.
+    """
+
+    dataset_dir = Path(path)
+    configs = {
+        'dataset': [],
+        'total': 0
+    }
+    total = 0
+
+    for dir in dataset_dir.glob('*'):
+        if dir.is_dir():
+            name = dir.name
+            sz_kb = round(_get_folder_size(dir) / 1024, 1)
+            ann_path = os.path.join(dir, 'annotation.json')
+            can_train = os.path.exists(ann_path)
+            
+            # 检测 masks 目录
+            masks_dir = os.path.join(dir, 'masks')
+            masks_info = None
+            if os.path.isdir(masks_dir):
+                mask_count = len([f for f in os.listdir(masks_dir) if os.path.isfile(os.path.join(masks_dir, f))])
+                masks_info = {
+                    'name': 'masks.zip',
+                    'size_kb': round(_get_folder_size(masks_dir) / 1024, 1),
+                    'mask_count': mask_count
+                }
+            
+            # 检测 images 目录
+            images_dir = os.path.join(dir, 'images')
+            image_count = 0
+            if os.path.isdir(images_dir):
+                image_count = len([f for f in os.listdir(images_dir)
+                                   if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.webp'))])
+            
+            configs['dataset'].append({
+                'id': name,
+                'size_kb': sz_kb,
+                'can_train': can_train,
+                'image_count': image_count,
+                'masks_info': masks_info,
+                'has_annotation': os.path.exists(ann_path),
+            })
+            total += 1
+    
+    configs['total'] = total
+    return configs
 
 def handle_zip_upload(
     file_stream: SaveableFileStream,
@@ -250,6 +324,49 @@ def save_json_file(
     return {
         "size_kb": sz_kb,
         "uploaded_at": uploaded_at
+    }
+
+def save_image_file(
+    file_stream: SaveableFileStream,
+    original_filename: str,
+    base_save_dir: str,
+    name: str
+) -> dict:
+    """
+    处理简单的 image 上传, 返回基本批次信息.
+
+    Args:
+        file_stream (SaveableFileStream): 文件流.
+        original_filename (str): 原始文件名.
+        base_save_dir (str): 基础存储路径.
+        name (str): 作为保存文件的子目录.
+    Returns:
+        dict: 返回保存成功的批次与基本文件信息.
+    """
+    target_dir = os.path.join(base_save_dir, name)
+    os.makedirs(target_dir, exist_ok=True)
+
+    safe_base_name = os.path.basename(original_filename)
+
+    save_path = os.path.join(target_dir, safe_base_name)
+
+    if hasattr(file_stream, 'save'):
+        file_stream.save(save_path)
+    elif hasattr(file_stream, 'file') and hasattr(file_stream, 'filename'):
+        with open(save_path, "wb") as buffer:
+            shutil.copyfileobj(file_stream.file, buffer) # type: ignore
+    else:
+        with open(save_path, "wb") as buffer:
+            data = file_stream.read() # type: ignore
+            buffer.write(data)
+
+    return {
+        "status": "success",
+        "batch_id": name,
+        "original_filename": original_filename,
+        "saved_filename": safe_base_name,
+        "saved_path": save_path,
+        "file_size_bytes": os.path.getsize(save_path) if os.path.exists(save_path) else 0
     }
 
 def handle_batch_delete(base_path: str, name: str) -> None:

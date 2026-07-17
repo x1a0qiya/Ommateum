@@ -98,7 +98,7 @@ def _build_coco_json(
     }
 
     import json
-    out_path = export_path / "annotations.json"
+    out_path = export_path / "annotation.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(coco_data, f, ensure_ascii=False, indent=2)
     print(f"  COCO JSON 已导出: {out_path}")
