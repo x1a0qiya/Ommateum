@@ -125,14 +125,10 @@
   let W, H, particles = [];
   let mouse = { x: -9999, y: -9999 };
   let isRunning = false;
-  const COUNT = 80, MAX_DIST = 150, SPEED = 0.35, MOUSE_RADIUS = 200;
-  // ---- 配置 ----
-  const COUNT = 80;          // 粒子数量
-  const MAX_DIST = 150;      // 连线最大距离 (px)
-  const SPEED = 0.35;        // 粒子移动速度
-  const DAMPING = 0.999;     // 每帧速度衰减系数
-  const MIN_SPEED = 0.35;    // 衰减下限（低于此速度不再衰减）
-  const MOUSE_RADIUS = 200;  // 鼠标影响半径
+  const COUNT = 80, MAX_DIST = 150, SPEED = 1.1, MOUSE_RADIUS = 200;
+  const DAMPING = 0.988,     // 速度阻尼系数（每帧保留 98.8% 的速度）
+        JITTER = 0.05,        // 随机微扰强度，保持粒子不会完全静止
+        MIN_SPEED = 0.10;     // 低于此速度时自动补充动能
 
   // ---- DPR 适配 ----
   function resize() {
@@ -155,6 +151,7 @@
       this.alpha = 0.35+Math.random()*0.35;
     }
     update() {
+<<<<<<< HEAD
       // 速度衰减：每帧乘以阻尼系数，但不低于下限
       const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
       if (speed > MIN_SPEED) {
@@ -170,12 +167,41 @@
       if (this.x < -20 || this.x > W + 20) this.vx *= -1;
       if (this.y < -20 || this.y > H + 20) this.vy *= -1;
       // 边界修正
+=======
+      // ── 阻尼衰减 ──
+      this.vx *= DAMPING;
+      this.vy *= DAMPING;
+
+      // ── 随机微扰（模拟流体扰动），避免粒子因阻尼完全静止 ──
+      this.vx += (Math.random() - 0.5) * JITTER;
+      this.vy += (Math.random() - 0.5) * JITTER;
+
+      // ── 最小速度兜底 ──
+      const spd = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+      if (spd < MIN_SPEED && spd > 0) {
+        const boost = MIN_SPEED / spd;
+        this.vx *= boost;
+        this.vy *= boost;
+      }
+
+      // ── 位置更新 ──
+      this.x += this.vx;
+      this.y += this.vy;
+
+      // ── 边界弹性碰撞（带能量损耗） ──
+      if (this.x < 0)      { this.x = 0;      this.vx = Math.abs(this.vx) * 0.6; }
+      if (this.x > W)      { this.x = W;      this.vx = -Math.abs(this.vx) * 0.6; }
+      if (this.y < 0)      { this.y = 0;      this.vy = Math.abs(this.vy) * 0.6; }
+      if (this.y > H)      { this.y = H;      this.vy = -Math.abs(this.vy) * 0.6; }
+
+>>>>>>> version_1.0
       this.x = Math.max(-20, Math.min(W + 20, this.x));
       this.y = Math.max(-20, Math.min(H + 20, this.y));
     }
     draw() {
-      ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
-      ctx.fillStyle=`hsla(${this.hue},${this.sat}%,${this.light}%,${this.alpha})`; ctx.fill();
+      ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(${this.hue},${this.sat}%,${this.light}%,${this.alpha})`;
+      ctx.fill();
     }
   }
   function init() { particles=[]; for(let i=0;i<COUNT;i++) particles.push(new Particle()); }
