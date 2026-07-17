@@ -108,6 +108,14 @@ def export_task(task_id):
         download_name=f"task_{task_id}.zip"
     )
 
+@app.route('/api/preview/<batch_name>/<path:image_name>')
+def serve_preview_image(batch_name, image_name):
+    images_dir = os.path.join(serves.DATASET_DIR, batch_name, 'images')
+    file_path = os.path.join(images_dir, image_name)
+    if not os.path.isfile(file_path):
+        return jsonify({'status': 'error', 'timestamp': serves.get_datetime(), 'error': 'Image not found: ' + image_name}), 404
+    return send_file(file_path)
+
 @app.route('/api/upload_image')
 def upload_image():
     data = request.get_data(as_text=True) or None
