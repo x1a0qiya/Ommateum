@@ -151,23 +151,6 @@
       this.alpha = 0.35+Math.random()*0.35;
     }
     update() {
-<<<<<<< HEAD
-      // 速度衰减：每帧乘以阻尼系数，但不低于下限
-      const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-      if (speed > MIN_SPEED) {
-        const decayed = speed * DAMPING;
-        const newSpeed = Math.max(decayed, MIN_SPEED);
-        const ratio = newSpeed / speed;
-        this.vx *= ratio;
-        this.vy *= ratio;
-      }
-      this.x += this.vx;
-      this.y += this.vy;
-      // 边界回弹
-      if (this.x < -20 || this.x > W + 20) this.vx *= -1;
-      if (this.y < -20 || this.y > H + 20) this.vy *= -1;
-      // 边界修正
-=======
       // ── 阻尼衰减 ──
       this.vx *= DAMPING;
       this.vy *= DAMPING;
@@ -194,7 +177,6 @@
       if (this.y < 0)      { this.y = 0;      this.vy = Math.abs(this.vy) * 0.6; }
       if (this.y > H)      { this.y = H;      this.vy = -Math.abs(this.vy) * 0.6; }
 
->>>>>>> version_1.0
       this.x = Math.max(-20, Math.min(W + 20, this.x));
       this.y = Math.max(-20, Math.min(H + 20, this.y));
     }
