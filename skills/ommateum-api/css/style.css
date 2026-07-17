@@ -466,13 +466,81 @@ body.scrolled .topbar { transform: translateY(-100%); opacity: 0; pointer-events
 #heroInference .inf-grid main {
   display: grid;
   grid-template-columns: 1fr;
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 14px;
   min-height: 0;
 }
 #heroInference .panel { display: flex; flex-direction: column; min-height: 0; }
 #heroInference .panel-body { flex: 1; min-height: 0; overflow: auto; }
 #heroInference .footer { margin-top: 0; justify-content: center; gap: 16px; text-align: center; padding: 12px 28px; }
+
+/* 第三页：批次选择 & 单张识别面板紧凑 */
+#heroInference .inf-batch-panel .panel-body {
+  padding: 10px 14px;
+}
+#heroInference .inf-batch-panel select.field {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+#heroInference .inf-single-panel .panel-body {
+  padding: 10px 14px;
+}
+#heroInference .inf-single-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#heroInference .inf-single-zone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+#heroInference .inf-single-zone .uz-icon {
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  border-radius: 8px;
+}
+#heroInference .inf-single-zone .uz-icon svg {
+  width: 18px;
+  height: 18px;
+}
+#heroInference .inf-single-zone .uz-title {
+  font-size: 13px;
+  margin: 0;
+  white-space: nowrap;
+}
+#heroInference .inf-single-zone .uz-sub {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#heroInference #singleImagePredictBtn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 13px;
+  padding: 9px 16px;
+}
+#heroInference .single-img-result {
+  margin-top: 8px;
+  padding: 8px 12px;
+  gap: 10px;
+}
+#heroInference .single-img-result img {
+  width: 40px;
+  height: 40px;
+}
+#heroInference .single-img-verdict {
+  font-size: 13px;
+}
+#heroInference .single-img-detail {
+  font-size: 11px;
+}
 
 /* ---- Sidebar config ---- */
 .config-section { margin-bottom: 28px; }
@@ -880,6 +948,8 @@ select.field:disabled { opacity: 0.5; cursor: not-allowed; }
 @media (max-width: 1200px) {
   #heroInference .inf-grid { grid-template-columns: 1fr; }
   #heroInference .inf-grid aside { max-height: 300px; }
+  #heroInference .inf-single-row { flex-direction: column; }
+  #heroInference #singleImagePredictBtn { width: 100%; }
 }
 @media (max-width: 980px) {
   .workspace { grid-template-columns: 1fr; height: auto; }

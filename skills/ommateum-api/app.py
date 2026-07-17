@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, send_from_directory, Response
+from flask import Flask, request, jsonify, send_file, send_from_directory, Response,after_this_request
 from flask_cors import CORS
 import os
 
@@ -84,12 +84,6 @@ def get_training_history():
 def export_task(task_id):
     try:
         temp_zip_path = serves.pack_directory_to_temp_zip(task_id)
-    except FileNotFoundError as e:
-        return jsonify({
-            'status': 'error',
-            'timestamp': serves.get_datetime(),
-            'error': repr(e)
-        })
     except Exception as e:
         return jsonify({
             'status': 'error',
@@ -98,21 +92,17 @@ def export_task(task_id):
         })
 
 
-    def generate_and_cleanup():
+    @after_this_request
+    def remove_file(response):
         try:
-            with open(temp_zip_path, 'rb') as f:
-                while chunk := f.read(8192):
-                    yield chunk
-        finally:
             if os.path.exists(temp_zip_path):
-                try:
-                    os.remove(temp_zip_path)
-                except Exception as e:
-                    app.logger.error(f"Cannot delete {temp_zip_path}: {e}")
-
+                os.remove(temp_zip_path)
+        except Exception as e:
+            app.logger.error(f"Cannot delete temp zip {temp_zip_path}: {e}")
+        return response
 
     return send_file(
-        generate_and_cleanup(), #type: ignore
+        temp_zip_path,
         mimetype="application/zip",
         as_attachment=True,
         download_name=f"task_{task_id}.zip"

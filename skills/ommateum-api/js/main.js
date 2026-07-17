@@ -429,7 +429,6 @@ function renderDatasetList() {
 async function updateStats() {
   $('#statNormal').textContent=state.batches.length;
   $('#statDefect').textContent=state.batches.length>0?state.batches.length:0;
-  if(state.results&&state.results.length>0){var c=state.results.filter(r=>r.expected_verdict===r.verdict).length;$('#statAccuracy').textContent=(c/state.results.length*100).toFixed(1)+'%';}
 }
 async function deleteBatch(batchId) {
   var prev=[...state.batches];state.batches=state.batches.filter(b=>b.batch_id!==batchId);
@@ -555,14 +554,14 @@ function updateTrainSummary(){
 function setupTrainingControls(){$('#advOptionsBtn').addEventListener('click',openAdvModal);$('#advClose').addEventListener('click',closeAdvModal);$('#advModal').addEventListener('click',(e)=>{if(e.target===$('#advModal'))closeAdvModal();});$('#advReset').addEventListener('click',()=>{state.advParams={};populateAdvFields();});$('#advConfirm').addEventListener('click',function(){var result=collectAdvParams();if(result.errors){toast('参数校验失败：'+result.errors.join(', '),'error');return;}state.advParams=result;closeAdvModal();updateTrainSummary();});$('#trainBtn').addEventListener('click',startTraining);}
 async function startTraining(){
   if(!state.selectedBatch){toast('请先上传数据集并选择批次','error');return;}
-  $('#trainBtn').disabled=true;$('#trainProgress').classList.add('show');$('#tpTotalEpoch').textContent=state.advParams.yolo_epochs||_TRAIN_DEFAULTS.yolo_epochs;$('#tpEpoch').textContent='0';$('#tpPct').textContent='0%';$('#tpFill').style.width='0%';$('#tpLoss').textContent='—';$('#tpValLoss').textContent='—';$('#tpAcc').textContent='—';$('#tpStage').textContent='准备中';
+  $('#trainBtn').disabled=true;$('#trainProgress').classList.add('show');$('#tpTotalEpoch').textContent=state.advParams.yolo_epochs||_TRAIN_DEFAULTS.yolo_epochs;$('#tpEpoch').textContent='0';$('#tpPct').textContent='0%';$('#tpFill').style.width='0%';$('#tpStage').textContent='准备中';
   try{const d=await API.train({params:state.advParams,batch_name:state.selectedBatch});if(!d||!d.task_id)throw new Error((d&&d.error)||'训练启动失败，未获取到任务ID');state.trainingTaskId=d.task_id;toast('训练已启动'+(d.estimated_seconds?', 预计 '+d.estimated_seconds+'s':''),'info');pollTraining(d.task_id);}
   catch(e){toast('训练启动失败：'+e.message,'error');$('#trainProgress').classList.remove('show');$('#trainBtn').disabled=false;}
 }
 async function pollTraining(taskId){
   if(state.trainingPollTimer)clearInterval(state.trainingPollTimer);
   state.trainingPollTimer=setInterval(async()=>{
-    try{const resp=await API.trainStatus(taskId);const t=resp.data||resp;const pct=Math.round((t.progress||0)*100);$('#tpEpoch').textContent=t.current_epoch||0;$('#tpStage').textContent=t.stage||(t.status==='training'?'训练中':t.status);$('#tpPct').textContent=pct+'%';$('#tpFill').style.width=pct+'%';if(t.loss!=null)$('#tpLoss').textContent=t.loss.toFixed(4);if(t.val_loss!=null)$('#tpValLoss').textContent=t.val_loss.toFixed(4);if(t.accuracy!=null)$('#tpAcc').textContent=(t.accuracy*100).toFixed(1)+'%';
+    try{const resp=await API.trainStatus(taskId);const t=resp.data||resp;const pct=Math.round((t.progress||0)*100);$('#tpEpoch').textContent=t.current_epoch||0;$('#tpStage').textContent=t.stage||(t.status==='training'?'训练中':t.status);$('#tpPct').textContent=pct+'%';$('#tpFill').style.width=pct+'%';
       if(t.status==='error'){clearInterval(state.trainingPollTimer);state.trainingPollTimer=null;state.trainingTaskId=null;$('#trainBtn').disabled=false;toast('训练失败：'+(t.error||'未知错误'),'error');return;}
       if(t.status==='done'){clearInterval(state.trainingPollTimer);state.trainingPollTimer=null;state.trainingTaskId=null;$('#trainBtn').disabled=false;const acc=(t.final_accuracy*100).toFixed(1);toast(`训练完成！准确率 ${acc}%`,'success');if(state.selectedModel)await loadWeights(state.selectedModel);await loadTrainingHistory();await loadStats();updateTrainSummary();}
     }catch(e){clearInterval(state.trainingPollTimer);state.trainingPollTimer=null;state.trainingTaskId=null;$('#trainBtn').disabled=false;toast('训练状态查询失败：'+e.message,'error');}
@@ -572,9 +571,18 @@ async function loadTrainingHistory(){try{const data=await API.trainHistory();sta
 function renderTrainedList(){
   const container=$('#trainedItems'),empty=$('#trainedEmpty');container.innerHTML='';
   const done=state.trainedHistory.filter(t=>t.status==='done');if(done.length===0){empty.style.display='block';return;}empty.style.display='none';
-  done.forEach(t=>{const modelObj=state.models.find(m=>m.id===t.model),modelName=modelObj?modelObj.name:t.model;const acc=(t.accuracy*100).toFixed(1);const item=el('div','trained-item');item.innerHTML=`<div class="ti-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></div><div class="ti-info"><div class="ti-name">${modelName} · 训练权重</div><div class="ti-meta">准确率 ${acc}% · ${t.epochs} epoch · ${t.normal_count}正常+${t.defect_count}缺陷 · ${t.weight_id||''}</div></div><div class="ti-actions"><button class="btn btn-ghost btn-sm" data-action="use" data-model="${t.model}" data-weight="${t.weight_id}">在线使用</button><a class="btn btn-ghost btn-sm" href="${API.exportUrl(t.id)}" download>导出模型</a></div>`;item.querySelector('[data-action="use"]').addEventListener('click',()=>useTrainedModel(t.model,t.weight_id));container.appendChild(item);});
+  done.forEach(t=>{const modelObj=state.models.find(m=>m.id===t.model),modelName=modelObj?modelObj.name:t.model;const item=el('div','trained-item');item.innerHTML=`<div class="ti-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></div><div class="ti-info"><div class="ti-name">${modelName} · 训练权重</div><div class="ti-meta">${t.weight_id||''}</div></div><div class="ti-actions"><button class="btn btn-ghost btn-sm" data-action="use" data-model="${t.model}" data-weight="${t.weight_id}">在线使用</button><a class="btn btn-ghost btn-sm" href="${API.exportUrl(t.id)}" download>导出模型</a></div>`;item.querySelector('[data-action="use"]').addEventListener('click',()=>useTrainedModel(t.model,t.weight_id));container.appendChild(item);});
 }
-async function useTrainedModel(modelId,weightId){if(state.selectedModel!==modelId){await selectModel(modelId);}setTimeout(()=>{selectWeight(weightId);toast('已切换至训练模型，可直接执行检测','success');$('.workspace').scrollIntoView({behavior:'smooth',block:'start'});},state.selectedModel!==modelId?500:0);}
+async function useTrainedModel(modelId,weightId){
+  if(state.selectedModel!==modelId){
+    await selectModel(modelId);
+  }
+  state.selectedWeight=weightId;
+  renderWeights();
+  checkReady();
+  toast('已切换至训练模型，可直接执行检测','success');
+  requestAnimationFrame(()=>{$('#workspace').scrollIntoView({behavior:'smooth',block:'start'});});
+}
 
 /* ============================================================
    Inference page (screen 3)
@@ -593,7 +601,13 @@ async function loadInfWeights(modelId){
 function renderInfWeights(){const list=$('#infWeightList');list.innerHTML='';if(state.infWeights.length===0){list.innerHTML='<div class="weight-empty">暂无可用权重</div>';return;}state.infWeights.forEach(w=>{const item=el('div','weight-item'+(state.infSelectedWeight===w.id?' active':''));item.innerHTML=`<div class="wi-radio"></div><span class="wi-name">${w.name}</span><span class="wi-meta">${w.size_mb||''} MB</span>`;item.addEventListener('click',()=>selectInfWeight(w.id));list.appendChild(item);});}
 function selectInfWeight(wid){if(state.infSelectedWeight===wid){state.infSelectedWeight=null;renderInfWeights();infCheckReady();return;}state.infSelectedWeight=wid;renderInfWeights();infCheckReady();}
 function infCheckReady(){$('#infPredictBtn').disabled=!(state.infSelectedModel&&state.infSelectedWeight&&state.infBatchName&&state.online);var siBtn=$('#singleImagePredictBtn');if(siBtn)siBtn.disabled=!(state.singleImageFile&&state.infSelectedModel&&state.infSelectedWeight&&state.online);}
-function setupInfBatch(){var sel=$('#infBatchSelect'),inp=$('#infBatchInput');sel.addEventListener('change',()=>{state.infBatchName=sel.value||null;if(sel.value)inp.value=sel.value;infCheckReady();});inp.addEventListener('input',()=>{state.infBatchName=inp.value.trim()||null;if(state.infBatchName)sel.value='';infCheckReady();});}
+function setupInfBatch(){
+  var sel=$('#infBatchSelect');
+  sel.addEventListener('change',()=>{
+    state.infBatchName=sel.value||null;
+    infCheckReady();
+  });
+}
 async function runInfPredict(){
   if(!state.infSelectedModel||!state.infSelectedWeight){toast('请先选择模型和权重','error');return;}
   if(!state.infBatchName){toast('请选择或输入数据批次','error');return;}
@@ -647,7 +661,7 @@ function setupInfSingleImage(){
 }
 
 /* ---- Stats from API ---- */
-async function loadStats(){try{const data=await API.stats();if(data.recent_accuracy!=null&&data.recent_accuracy>0)$('#statAccuracy').textContent=(data.recent_accuracy*100).toFixed(1)+'%';if(data.trained_weights!=null)$('#statTrained').textContent=data.trained_weights;}catch(e){}}
+async function loadStats(){try{const data=await API.stats();if(data.trained_weights!=null)$('#statTrained').textContent=data.trained_weights;}catch(e){}}
 
 /* ---- Error log viewer ---- */
 async function loadErrors(){try{var data=await API.errorLogs(50);var errors=data.errors||[];var el=$('#errIndicator');if(errors.length>0){el.style.display='flex';$('#errCount').textContent=errors.length>99?'99+':errors.length;}else el.style.display='none';}catch(e){}}
