@@ -326,6 +326,49 @@ def save_json_file(
         "uploaded_at": uploaded_at
     }
 
+def save_image_file(
+    file_stream: SaveableFileStream,
+    original_filename: str,
+    base_save_dir: str,
+    name: str
+) -> dict:
+    """
+    处理简单的 image 上传, 返回基本批次信息.
+
+    Args:
+        file_stream (SaveableFileStream): 文件流.
+        original_filename (str): 原始文件名.
+        base_save_dir (str): 基础存储路径.
+        name (str): 作为保存文件的子目录.
+    Returns:
+        dict: 返回保存成功的批次与基本文件信息.
+    """
+    target_dir = os.path.join(base_save_dir, name)
+    os.makedirs(target_dir, exist_ok=True)
+
+    safe_base_name = os.path.basename(original_filename)
+
+    save_path = os.path.join(target_dir, safe_base_name)
+
+    if hasattr(file_stream, 'save'):
+        file_stream.save(save_path)
+    elif hasattr(file_stream, 'file') and hasattr(file_stream, 'filename'):
+        with open(save_path, "wb") as buffer:
+            shutil.copyfileobj(file_stream.file, buffer) # type: ignore
+    else:
+        with open(save_path, "wb") as buffer:
+            data = file_stream.read() # type: ignore
+            buffer.write(data)
+
+    return {
+        "status": "success",
+        "batch_id": name,
+        "original_filename": original_filename,
+        "saved_filename": safe_base_name,
+        "saved_path": save_path,
+        "file_size_bytes": os.path.getsize(save_path) if os.path.exists(save_path) else 0
+    }
+
 def handle_batch_delete(base_path: str, name: str) -> None:
     """
     删除指定名称的批次文件夹及其内部的所有文件.

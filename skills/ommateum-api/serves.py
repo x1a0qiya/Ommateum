@@ -253,7 +253,7 @@ def _run_segment_async(task_id, custom_args):
     finally:
         task_events[task_id]["event"].set()
 
-def predict(data: str | None) -> dict:
+def predict(data: str | None, file = None) -> dict:
     if data is None:
         return {
             'status': 'error',
@@ -262,9 +262,21 @@ def predict(data: str | None) -> dict:
         }
     try:
         data: dict = json.loads(data)
-        batch_dir =  os.path.join(DATASET_DIR, data['batch_name'])
-        images_dir = os.path.join(batch_dir, 'images')
-        masks_dir = os.path.join(batch_dir, 'masks')
+        if file is None or file == '':
+            batch_dir =  os.path.join(DATASET_DIR, data['batch_name'])
+            images_dir = os.path.join(batch_dir, 'images')
+            masks_dir = os.path.join(batch_dir, 'masks')
+        else:
+            batch_dir = os.path.join(DATASET_DIR, 'temp')
+            api_utils.save_image_file(
+                file_stream=file,
+                original_filename='temp',
+                base_save_dir=batch_dir,
+                name='images'
+            )
+            images_dir = os.path.join(batch_dir, 'images')
+            masks_dir = os.path.join(batch_dir, 'masks')
+
         weights_dir = os.path.join(WEIGHTS_DIR, data['weight'])
         yolo_path = os.path.join(weights_dir, 'yolo', data['weight']+'_best.pt')
         sam2_lora_dir = os.path.join(weights_dir, 'sam2')

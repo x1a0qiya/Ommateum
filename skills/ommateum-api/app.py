@@ -118,6 +118,12 @@ def export_task(task_id):
         download_name=f"task_{task_id}.zip"
     )
 
+@app.route('/api/upload_image')
+def upload_image():
+    data = request.get_data(as_text=True) or None
+    image = request.files.get('image')
+    return jsonify(serves.predict(data, image))
+
 # ==================== 静态文件服务 ====================
 # 由于 static_folder='' 禁用了 Flask 默认静态文件处理，需显式路由
 @app.route('/js/<path:filename>')
