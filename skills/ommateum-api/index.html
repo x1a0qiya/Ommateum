@@ -63,8 +63,7 @@
         <div class="stat"><span class="v" id="statModels">—</span><span class="l">可用模型</span></div>
         <div class="stat"><span class="v" id="statNormal">0</span><span class="l">已上传数据集</span></div>
         <div class="stat"><span class="v" id="statDefect">0</span><span class="l">数据批次</span></div>
-        <div class="stat"><span class="v" id="statTrained">0</span><span class="l">已训练模型</span></div>
-        <div class="stat"><span class="v" id="statAccuracy">—</span><span class="l">最近准确率</span></div>
+        <div class="stat"><span class="v" id="statTrained">0</span><span class="l">已训练权重</span></div>
       </div>
     </div>
     <a class="scroll-cue" href="#workspace" aria-label="向下滚动查看功能">
@@ -169,16 +168,11 @@
               <span class="tp-pct" id="tpPct">0%</span>
             </div>
             <div class="tp-bar"><div class="fill" id="tpFill" style="width:0%"></div></div>
-            <div class="tp-metrics">
-              <div class="tp-metric"><div class="tm-lbl">训练损失</div><div class="tm-val loss" id="tpLoss">—</div></div>
-              <div class="tp-metric"><div class="tm-lbl">验证损失</div><div class="tm-val loss" id="tpValLoss">—</div></div>
-              <div class="tp-metric"><div class="tm-lbl">准确率</div><div class="tm-val acc" id="tpAcc">—</div></div>
-            </div>
           </div>
 
           <!-- Trained models list -->
           <div class="trained-list" id="trainedList">
-            <div class="trained-list-header"><h3>已训练模型</h3></div>
+            <div class="trained-list-header"><h3>已训练权重</h3></div>
             <div class="trained-empty" id="trainedEmpty">训练完成后，模型将显示在此处，可导出或在线使用</div>
             <div id="trainedItems"></div>
           </div>
@@ -229,34 +223,25 @@
       <main>
 
         <!-- Batch select -->
-        <div class="panel reveal">
+        <div class="panel reveal inf-batch-panel">
           <div class="panel-head"><span class="idx">02</span><h2>选择数据批次</h2></div>
           <div class="panel-body">
-            <div class="config-section">
-              <div class="config-label">批次名称 <span class="hint">选择已有批次或手动输入</span></div>
-              <select class="field" id="infBatchSelect"><option value="">— 请先上传数据集 —</option></select>
-            </div>
-            <div class="config-section">
-              <div class="config-label">直接输入批次名</div>
-              <input type="text" class="field" id="infBatchInput" placeholder="batch_20260714">
-            </div>
+            <select class="field" id="infBatchSelect"><option value="">— 请先上传数据集 —</option></select>
           </div>
         </div>
 
         <!-- Single image recognition -->
-        <div class="panel reveal">
+        <div class="panel reveal inf-single-panel">
           <div class="panel-head"><span class="idx">03</span><h2>单张图片识别</h2></div>
           <div class="panel-body">
-            <div class="config-section">
-              <div class="upload-zone single-image" id="zoneSingleImage">
+            <div class="inf-single-row">
+              <div class="upload-zone single-image inf-single-zone" id="zoneSingleImage">
                 <input type="file" id="inputSingleImage" accept="image/*" hidden>
                 <div class="uz-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
                 <div class="uz-title">上传待识别图片</div>
                 <div class="uz-sub" id="singleImageSub">点击选择单张图片</div>
               </div>
-            </div>
-            <div class="config-section" style="margin-top:10px;">
-              <button class="btn btn-primary btn-block" id="singleImagePredictBtn" disabled>
+              <button class="btn btn-primary" id="singleImagePredictBtn" disabled>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                 执行单张识别
               </button>
