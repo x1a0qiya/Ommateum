@@ -17,37 +17,16 @@
 
 ## 目录
 
-- [目录](#目录)
 - [特性](#特性)
-  - [核心工作流](#核心工作流)
 - [快速开始](#快速开始)
-  - [环境要求](#环境要求)
-  - [Docker（推荐，支持 GPU）](#docker推荐支持-gpu)
-  - [本地安装](#本地安装)
-  - [启动 Web 服务](#启动-web-服务)
 - [使用指南](#使用指南)
   - [训练](#训练)
-    - [YOLO 检测模型](#yolo-检测模型)
-    - [SAM2 分割模型](#sam2-分割模型)
   - [推理](#推理)
-    - [命令行](#命令行)
-    - [Python API](#python-api)
-    - [端到端分割推理](#端到端分割推理)
   - [SAHI 切片推理](#sahi-切片推理)
   - [数据增强](#数据增强)
   - [格式转换](#格式转换)
 - [Web 前端](#web-前端)
-  - [训练面板](#训练面板)
-  - [推理面板](#推理面板)
-  - [模型管理](#模型管理)
-  - [界面特性](#界面特性)
 - [API 参考](#api-参考)
-  - [系统](#系统)
-  - [模型与权重](#模型与权重)
-  - [数据集](#数据集)
-  - [检测](#检测)
-  - [训练](#训练-1)
-  - [统计与日志](#统计与日志)
 - [项目结构](#项目结构)
 - [技术栈](#技术栈)
 - [开发](#开发)
@@ -142,6 +121,36 @@ python app.py
 
 ## 使用指南
 
+### 示例代码
+<table>
+  <thead>
+    <tr>
+      <th rowspan="2">任务</th>
+      <th rowspan="2">微调 yolo-sam2 模型</th>
+      <th rowspan="2">使用模型</th>
+      <th colspan="4" align="center">部分模型</th>
+    </tr>
+    <tr>
+      <th>yolo 微调</th>
+      <th>yolo</th>
+      <th>sam2微调</th>
+      <th>sam2</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <!-- 使用相对路径链接到项目中的 docs/api.md -->
+      <td><a href="scripts/example">示例代码</a></td>
+      <td><a href="scripts/example/model/train.sh">示例代码</td>
+      <td><a href="scripts/example/model/segment.sh">示例代码</td>
+      <td><a href="scripts/example/identify/train.sh">示例代码</td>
+      <td><a href="scripts/example/identify/test.sh">示例代码</td>
+      <td><a href="scripts/example/sam2/train.sh">示例代码</td>
+      <td><a href="scripts/example/sam2/test.sh">示例代码</td>
+    </tr>
+  </tbody>
+</table>
+
 ### 训练
 
 #### YOLO 检测模型
@@ -150,11 +159,7 @@ python app.py
 
 ```bash
 # 使用脚本一键训练
-bash scripts/identify/train.sh \
-    --data dataset/data.yaml \
-    --name my_experiment \
-    --epochs 100 \
-    --batch 16
+bash scripts/identify/train.sh
 ```
 
 或通过 Python 直接调用：
@@ -180,7 +185,7 @@ train_model(Namespace(
 在 YOLO 检测结果的基础上，对候选区域进行像素级分割微调：
 
 ```bash
-bash scripts/sam2/fine-tuning.sh
+bash scripts/sam2/train.sh
 ```
 
 关键参数说明：
@@ -318,6 +323,8 @@ coco2yolo("dataset/annotations.json")
 - 错误日志面板（时间 / 类型 / 端点 / Traceback）
 
 ## API 参考
+
+详细文档参见 [API文档](docs/API.md).
 
 所有 API 以 `/api` 为前缀，返回统一的 JSON 格式：
 
@@ -493,9 +500,3 @@ mypy src/
 ## 许可
 
 [MIT](LICENSE) © 2026 x1a0qiya
-
----
-
-<p align="center">
-  <b>Ommateum</b> — 让每一处缺陷，无处遁形
-</p>
