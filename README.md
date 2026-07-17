@@ -425,16 +425,16 @@ ommateum/
 │       └── sahi.py             # SAHI 切片推理封装
 │
 ├── scripts/                    # Shell 训练 / 测试 / 切片脚本
-│   ├── identify/
-│   │   ├── train.sh            # YOLO 检测训练
-│   │   └── test.sh             # YOLO 检测测试
-│   ├── sam2/
-│   │   ├── fine-tuning.sh      # SAM2 LoRA 微调
-│   │   └── test.sh             # SAM2 分割测试
-│   ├── segment.sh              # 端到端检测 + 分割
-│   ├── train.sh                # 统一训练入口
-│   ├── test.sh                 # 统一测试入口
-│   └── test_sahi.py            # SAHI 切片推理示例
+|   └── example/
+|       ├── identify/
+|       │   ├── train.sh            # YOLO 检测训练
+|       │   └── test.sh             # YOLO 检测测试
+|       ├── sam2/
+|       │   ├── train.sh      # SAM2 LoRA 微调
+|       │   └── test.sh             # SAM2 分割测试
+|       └── model
+|           ├── segment.sh              # 端到端检测 + 分割
+|           └── train.sh                # 统一训练入口
 │
 ├── skills/ommateum-api/        # Flask API + Web 前端
 │   ├── app.py                  # Flask 路由注册（26 个端点）
