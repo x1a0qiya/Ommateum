@@ -450,7 +450,7 @@ async function submitTask(batchName, weight) {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     var data = await res.json();
     var taskData = data.data || {};
-    if (data.status !== 'processing' || !taskData.task_id) throw new Error(taskData.error || data.error || '提交任务失败：未知状态');
+    if (data.status !== 'ok' || !taskData.task_id) throw new Error(taskData.error || data.error || '提交任务失败：未知状态');
     taskId = taskData.task_id;
   } catch (err) { toast('提交任务失败: ' + err.message, 'error'); throw err; }
 
@@ -625,6 +625,7 @@ function renderInfResults(){
   var nd=state.infResults.filter(r=>r.verdict==='defect').length,nn=state.infResults.length-nd;
   var s=$('#infRtSummary');if(s)s.innerHTML='<span>共 <strong>'+state.infResults.length+'</strong> 张 · 缺陷 <strong style="color:var(--defect-dark)">'+nd+'</strong> 张 · 正常 <strong style="color:var(--normal-dark)">'+nn+'</strong> 张</span>';
   var eb=$('#infExportResultsBtn');if(eb)eb.onclick=()=>{var rpt={exported_at:new Date().toISOString(),model:state.infSelectedModel,weight:state.infSelectedWeight,batch:state.infBatchName,summary:{total:state.infResults.length,defect_count:nd,normal_count:nn},results:state.infResults};var blob=new Blob([JSON.stringify(rpt,null,2)],{type:'application/json'});var url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='detect_results_'+state.infBatchName+'.json';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);toast('结果已导出','success');};
+  var zb=$('#infExportZipBtn');if(zb)zb.onclick=()=>{var a=document.createElement('a');a.href='/api/export/'+encodeURIComponent(state.infBatchName);a.download='detect_results_'+state.infBatchName+'.zip';document.body.appendChild(a);a.click();document.body.removeChild(a);toast('压缩包下载已开始','success');};
   state.infResults.forEach(r=>{var row=el('div','result-row'),v=r.verdict||'normal',conf=r.confidence||0,sc=v==='critical'?'crit':v==='defect'?'warn':'ok';var vTag=v==='defect'?(r.severity==='critical'?'严重缺陷':'缺陷'):'正常',cp=(conf*100).toFixed(1);row.innerHTML='<div class="result-thumb">'+(r.image_name?`<div class="thumb-name">${r.image_name.slice(0,2)}</div>`:'')+'</div><div class="result-info"><div class="ri-name">'+(r.image_name||'')+(r.rag_similar?`<span class="rag-badge" title="ChromaDB 中检索到 ${r.rag_similar.length} 条相似历史记录">RAG ${r.rag_similar.length}</span>`:'')+'</div><div class="ri-detail">'+(r.defect_type?'类型: '+r.defect_type+' · ':'')+'置信度 '+cp+'%</div></div><div class="result-verdict"><div class="conf-bar"><div class="fill '+sc+'" style="width:'+cp+'%"></div></div><span class="verdict-tag '+sc+'">'+vTag+'</span></div>';list.appendChild(row);});
 }
 

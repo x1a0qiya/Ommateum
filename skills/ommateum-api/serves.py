@@ -317,7 +317,8 @@ def predict(data: str | None) -> dict:
             "event": threading.Event(),
             "status": "processing",
             "error": None,
-            "task": "test"
+            "task": "test",
+            "batch_name": data['batch_name']
         }
         
         thread = threading.Thread(
@@ -355,12 +356,11 @@ def event_generator(task_id: str):
         yield f"data: {json.dumps({'status': 'error', 'timestamp': get_datetime(), 'error': 'Time out.'})}\n\n"
     else:
         result = {
+            "task_id": task_id,
             "status": event_info["status"],
             "error": event_info["error"]
         }
         yield f"data: {json.dumps(result)}\n\n"
-    
-    task_events.pop(task_id, None)
 
 def _run_train_async(task_id, custom_args):
     try:
