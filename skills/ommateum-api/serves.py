@@ -15,7 +15,7 @@ from src.ommateum.utils.generate_data_yaml import generate_data_yaml
 
 WEIGHTS_DIR = os.path.join(api_utils.get_root_dir(), 'weights')
 DATASET_DIR = os.path.join(api_utils.get_root_dir(), 'dataset')
-task_events = {} #{ task_id: { "event": threading.Event(), "status": "processing", "error": None, "task": "train" } }
+task_events : dict = {} #{ task_id: { "event": threading.Event(), "status": "processing", "error": None, "task": "train" } }
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -71,7 +71,7 @@ def health_check() -> dict:
                 "models": 1,
                 "images": img_num,
                 "trained_weights": weights_num,
-                "rag_available": True
+                "rag_available": True,
             }
         }
     except Exception as e:
@@ -266,9 +266,10 @@ def predict(data: str | None, file = None) -> dict:
             batch_dir =  os.path.join(DATASET_DIR, data['batch_name'])
             images_dir = os.path.join(batch_dir, 'images')
             masks_dir = os.path.join(batch_dir, 'masks')
+            saved_path = None
         else:
             batch_dir = os.path.join(DATASET_DIR, 'temp')
-            api_utils.save_image_file(
+            info = api_utils.save_image_file(
                 file_stream=file,
                 original_filename='temp',
                 base_save_dir=batch_dir,
@@ -276,6 +277,7 @@ def predict(data: str | None, file = None) -> dict:
             )
             images_dir = os.path.join(batch_dir, 'images')
             masks_dir = os.path.join(batch_dir, 'masks')
+            saved_path = info['saved_path']
 
         weights_dir = os.path.join(WEIGHTS_DIR, data['weight'])
         yolo_path = os.path.join(weights_dir, 'yolo', data['weight']+'_best.pt')
@@ -329,7 +331,8 @@ def predict(data: str | None, file = None) -> dict:
             "event": threading.Event(),
             "status": "processing",
             "error": None,
-            "task": "test"
+            "task": "test",
+            "batch_name": data['batch_name'] 
         }
         
         thread = threading.Thread(
@@ -344,6 +347,7 @@ def predict(data: str | None, file = None) -> dict:
             'timestamp': get_datetime(),
             'data': {
                 'task_id': task_id,
+                'image_path': saved_path
             }
         }
     except Exception as e:
@@ -372,7 +376,7 @@ def event_generator(task_id: str):
         }
         yield f"data: {json.dumps(result)}\n\n"
     
-    task_events.pop(task_id, None)
+    # task_events.pop(task_id, None)
 
 def _run_train_async(task_id, custom_args):
     try:
@@ -488,7 +492,8 @@ def train(data: str | None) -> dict:
             "event": threading.Event(),
             "status": "processing",
             "error": None,
-            "task": "train"
+            "task": "train",
+            "weight_id": task_id
         }
         
         thread = threading.Thread(
@@ -514,13 +519,11 @@ def train(data: str | None) -> dict:
     
 def pack_directory_to_temp_zip(task_id: str) -> str:
     # 优先尝试 WEIGHTS_DIR，若不存在则尝试 DATASET_DIR
-    source_dir = os.path.join(WEIGHTS_DIR, task_id)
-    if not os.path.isdir(source_dir):
-        source_dir = os.path.join(DATASET_DIR, task_id)
-    if not os.path.isdir(source_dir):
-        raise FileNotFoundError(
-            f"Task directory not found in either WEIGHTS_DIR or DATASET_DIR: {task_id}"
-        )
+    info = task_events[task_id]
+    if info['task'] == 'train':
+        source_dir = os.path.join(WEIGHTS_DIR, info['weight_id'])
+    else:
+        source_dir = os.path.join(DATASET_DIR, info['batch_name'])
 
     temp_dir = tempfile.gettempdir()
     temp_zip_base = os.path.join(temp_dir, f"export_temp_{os.urandom(8).hex()}")

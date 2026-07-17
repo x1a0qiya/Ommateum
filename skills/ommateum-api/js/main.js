@@ -450,7 +450,7 @@ async function submitTask(batchName, weight) {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     var data = await res.json();
     var taskData = data.data || {};
-    if (data.status !== 'processing' || !taskData.task_id) throw new Error(taskData.error || data.error || '提交任务失败：未知状态');
+    if (data.status !== 'ok' || !taskData.task_id) throw new Error(taskData.error || data.error || '提交任务失败：未知状态');
     taskId = taskData.task_id;
   } catch (err) { toast('提交任务失败: ' + err.message, 'error'); throw err; }
 

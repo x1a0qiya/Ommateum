@@ -112,7 +112,8 @@ def export_task(task_id):
 def upload_image():
     data = request.get_data(as_text=True) or None
     image = request.files.get('image')
-    return jsonify(serves.predict(data, image))
+    info = serves.predict(data, image)
+    return send_file(info['data']['image_path'])
 
 # ==================== 静态文件服务 ====================
 # 由于 static_folder='' 禁用了 Flask 默认静态文件处理，需显式路由
