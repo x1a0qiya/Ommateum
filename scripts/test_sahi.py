@@ -84,7 +84,7 @@ def main():
         print(f"  总检测框数: {len(results)}")
         result_path = Path(args.out_dir) / args.name
         print(f"  结果路径: {result_path}")
-        coco_path = result_path / "annotations.json"
+        coco_path = result_path / "annotation.json"
         print(f"  COCO JSON: {coco_path}  ({'存在' if coco_path.exists() else '不存在'})")
         print()
 

@@ -736,7 +736,7 @@ async function refreshDatasets() {
     const items = (data.dataset || []).map(d => ({
       batch_id: d.id, uploaded_at: null, can_train: !!d.can_train,
       images_file: d.size_kb != null ? { name: 'images.zip', size_kb: d.size_kb, image_count: d.image_count || 0 } : null,
-      annotation_file: d.has_annotation ? { name: 'annotations.json', size_kb: 0 } : null,
+      annotation_file: d.has_annotation ? { name: 'annotation.json', size_kb: 0 } : null,
       masks_file: d.masks_info || null,
     }));
     state.batches = items;

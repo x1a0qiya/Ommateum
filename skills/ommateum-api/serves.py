@@ -198,7 +198,7 @@ def upload_zip(images_zip, annotation_json, masks_zip) -> dict:
             )
             
             js['data']['annotation_file'] = {
-                'name': 'annotations.json',
+                'name': 'annotation.json',
                 'size_kb': ann_info['size_kb'] 
             }
 
@@ -591,7 +591,7 @@ def get_task_status(task_id: str) -> dict:
             batch_name = info.get('batch_name')
             if batch_name:
                 exp_dir = os.path.join(DATASET_DIR, batch_name, 'exp')
-                anno_path = os.path.join(exp_dir, 'annotations.json')
+                anno_path = os.path.join(exp_dir, 'annotation.json')
                 if os.path.exists(anno_path):
                     with open(anno_path, 'r', encoding='utf-8') as f:
                         coco_data = json.load(f)
